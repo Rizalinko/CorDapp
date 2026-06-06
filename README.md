@@ -16,7 +16,7 @@ delivery, CI/CD, and cloud infrastructure.
 
 | # | Deliverable | Location | Status |
 |---|-------------|----------|--------|
-| 1 | Docker image for a Corda node (+ local `docker-compose` network) | `docker/`, `docker-compose.yml` | _in progress_ |
+| 1 | Docker image for a Corda node (+ local `docker-compose` network) | `docker/`, `docker-compose.yml` ([docs](docs/part1-docker.md)) | ✅ done |
 | 2 | Helm chart for a Corda node | `charts/` | _planned_ |
 | 3 | Bootstrap a 3-node network on Kubernetes | `deploy/` | _planned_ |
 | 4 | CorDapp deployment strategy | `docker/node-image/`, `docs/` | _planned_ |
