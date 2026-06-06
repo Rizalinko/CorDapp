@@ -73,6 +73,8 @@ jobs:
           tags: ${{ env.NODE_IMAGE }}
           build-args: |
             JAR_IMAGE=${{ env.JAR_IMAGE }}
+          build-contexts: |
+            ${{ env.JAR_IMAGE }}=docker-image://${{ env.JAR_IMAGE }}
           cache-from: type=gha,scope=node
           cache-to: type=gha,mode=max,scope=node
 
