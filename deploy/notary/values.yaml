@@ -1,0 +1,8 @@
+legalName: "O=AcmeCorp Notary, L=London, C=GB"
+devMode: true
+secrets:
+  existingSecret: corda-notary-secrets
+certificates:
+  existingSecret: corda-notary-certs
+network:
+  existingNetworkParams: corda-network-params

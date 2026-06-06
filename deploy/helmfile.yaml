@@ -15,8 +15,7 @@ releases:
     chart: charts/corda-node
     namespace: corda
     values:
-      - deploy/notary/values.prd.yaml
-      - deploy/notary/values.kind.yaml
+      - deploy/notary/values.yaml
     needs:
       - corda/corda-bootstrap
 
@@ -24,8 +23,7 @@ releases:
     chart: charts/corda-node
     namespace: corda
     values:
-      - deploy/node1/values.prd.yaml
-      - deploy/node1/values.kind.yaml
+      - deploy/node1/values.yaml
     needs:
       - corda/corda-bootstrap
 
@@ -33,7 +31,6 @@ releases:
     chart: charts/corda-node
     namespace: corda
     values:
-      - deploy/node2/values.prd.yaml
-      - deploy/node2/values.kind.yaml
+      - deploy/node2/values.yaml
     needs:
       - corda/corda-bootstrap

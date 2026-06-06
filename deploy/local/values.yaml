@@ -1,0 +1,65 @@
+# Local Minikube overrides — applied on top of production values.
+# Usage:
+#   helm upgrade --install notary charts/corda-node -n corda \
+#     -f deploy/production/notary.values.yaml -f deploy/local/values.yaml
+#   helm upgrade --install node1  charts/corda-node -n corda \
+#     -f deploy/production/node1.values.yaml  -f deploy/local/values.yaml
+#   helm upgrade --install node2  charts/corda-node -n corda \
+#     -f deploy/production/node2.values.yaml  -f deploy/local/values.yaml
+
+# Use local minikube PostgreSQL instead of H2 (Corda 4.14 dropped H2)
+# DB name is overridden per-release via -f deploy/<node>/values.yaml
+db:
+  type: postgresql
+  host: corda-postgres-postgresql.corda.svc.cluster.local
+  port: 5432
+  name: cordanode1      # overridden per release; placeholder here
+  user: corda
+  schema: public
+
+# devMode = true disables PKI/TLS enforcement
+devMode: true
+
+# Disable the pre-install DB migration job (schema created by bootstrap chart)
+migrations:
+  enabled: false
+
+# Minimal resources for a laptop cluster
+resources:
+  requests:
+    cpu: "250m"
+    memory: 512Mi
+  limits:
+    memory: 1Gi
+
+# Let the chart create dev secrets (no external secret store in local dev)
+secrets:
+  existingSecret: ""
+  create: true
+  data:
+    rpc-password: "dev-rpc-password"
+    db-password: "devpassword"
+    keystore-password: "dev-keystore-password"
+    truststore-password: "dev-truststore-password"
+
+# Use the locally built image
+image:
+  repository: corda-node
+  tag: local
+  pullPolicy: Never
+
+certificates:
+  existingSecret: ""
+
+network:
+  existingNetworkParams: ""
+
+# Disable network policy (not enforced in standard Minikube CNI)
+networkPolicy:
+  enabled: false
+
+# Small PVC for local dev
+persistence:
+  storageClass: standard      # minikube's default storage class
+  size: 1Gi
+

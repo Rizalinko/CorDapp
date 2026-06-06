@@ -129,7 +129,7 @@ startup to learn its peers' addresses and public keys.
    PVCs are updated by the `materialize-netparams` init containers on the next
    pod restart.
 4. Add a new Helm release for the new node in `deploy/helmfile.yaml` with its own
-   `values.prd.yaml` and `values.kind.yaml`, with `needs: [corda/corda-bootstrap]`.
+   `values.yaml` and `values.prd.yaml`, with `needs: [corda/corda-bootstrap]`.
 5. Run `helmfile apply`.
 
 Note: adding a node changes the `network-parameters` file (it contains a hash of
