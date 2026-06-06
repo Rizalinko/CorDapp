@@ -43,7 +43,7 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           command: ["/bin/bash", "-c"]
           args:
-            - cp -L /certs-src/* /var/lib/corda/certificates/ && echo "certificates staged"
+            - mkdir -p /var/lib/corda/certificates && cp -L /certs-src/* /var/lib/corda/certificates/ && echo "certificates staged"
           volumeMounts:
             - {name: data, mountPath: /var/lib/corda}
             - {name: certs-src, mountPath: /certs-src, readOnly: true}
@@ -56,7 +56,13 @@ spec:
             {{- toYaml .Values.securityContext | nindent 12 }}
           command: ["/bin/bash", "-c"]
           args:
-            - cp -RL /netparams-src/* /var/lib/corda/ && echo "network params staged"
+            - |
+              mkdir -p /var/lib/corda/additional-node-infos
+              cp -L /netparams-src/network-parameters /var/lib/corda/network-parameters
+              for f in /netparams-src/nodeInfo-*; do
+                [ -f "$f" ] && cp -L "$f" /var/lib/corda/additional-node-infos/
+              done
+              echo "network params staged"
           volumeMounts:
             - {name: data, mountPath: /var/lib/corda}
             - {name: netparams-src, mountPath: /netparams-src, readOnly: true}

@@ -110,9 +110,6 @@ case "${DB_TYPE}" in
     emit "    dataSource.user = \"${DB_USER}\""
     emit "    dataSource.password = \"${DB_PASSWORD}\""
     emit "}"
-    emit "database {"
-    emit "    transactionIsolationLevel = \"READ_COMMITTED\""
-    emit "}"
     ;;
   *)
     echo "Unsupported DB_TYPE='${DB_TYPE}' (expected h2|postgresql)" >&2; exit 1
