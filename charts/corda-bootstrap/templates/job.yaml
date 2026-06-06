@@ -1,0 +1,71 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "corda-bootstrap.fullname" . }}-bootstrapper
+  labels:
+    {{- include "corda-bootstrap.labels" . | nindent 4 }}
+spec:
+  ttlSecondsAfterFinished: 86400
+  backoffLimit: 1
+  activeDeadlineSeconds: 1200
+  template:
+    metadata:
+      labels:
+        {{- include "corda-bootstrap.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "corda-bootstrap.serviceAccountName" . }}
+      restartPolicy: Never
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: bootstrapper
+          image: {{ include "corda-bootstrap.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["/bin/sh", "/scripts/bootstrap.sh"]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: work
+              mountPath: /bootstrap
+            - name: nodeconfs
+              mountPath: /nodeconfs
+            - name: scripts
+              mountPath: /scripts
+      containers:
+        - name: publisher
+          image: {{ .Values.kubectlImage }}
+          imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "/scripts/publish.sh"]
+          env:
+            - name: OUTPUT_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: BOOTSTRAP_DIR
+              value: /bootstrap
+          envFrom:
+            - secretRef:
+                name: {{ include "corda-bootstrap.fullname" . }}-passwords
+          resources:
+            requests:
+              cpu: "100m"
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: work
+              mountPath: /bootstrap
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: work
+          emptyDir: {}
+        - name: nodeconfs
+          configMap:
+            name: {{ include "corda-bootstrap.fullname" . }}-nodeconfs
+        - name: scripts
+          configMap:
+            name: {{ include "corda-bootstrap.fullname" . }}-scripts
+            defaultMode: 0755

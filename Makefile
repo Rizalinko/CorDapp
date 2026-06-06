@@ -90,25 +90,59 @@ build-node: build-jar ## Build the node-image (FROM jar-image)
 .PHONY: images
 images: build-node ## Build all images
 
-##@ Local network (Part 1 — needs Docker + compose)
+##@ Local compose network (Part 1 — needs Docker)
 
-.PHONY: network-up
-network-up: images ## Build images, bootstrap, and start the local 3-node network
+.PHONY: compose-up
+compose-up: images ## Build images, bootstrap, and start the compose network
 	NODE_IMAGE=$(NODE_IMAGE) docker compose up -d
-	@echo "Network starting. Watch readiness with: make network-status"
+	@echo "Network starting. Watch readiness with: make compose-status"
 
-.PHONY: network-status
-network-status: ## Show health/status of each service
+.PHONY: compose-status
+compose-status: ## Show health/status of each compose service
 	docker compose ps
 
-.PHONY: network-wait
-network-wait: ## Block until notary + node1 + node2 are healthy
+.PHONY: compose-wait
+compose-wait: ## Block until notary + node1 + node2 are healthy
 	TIMEOUT=$(or $(TIMEOUT),600) ./scripts/wait-healthy.sh notary node1 node2
 
-.PHONY: network-logs
-network-logs: ## Tail logs from all services
+.PHONY: compose-logs
+compose-logs: ## Tail logs from all compose services
 	docker compose logs -f
 
-.PHONY: network-down
-network-down: ## Stop the network and delete all volumes (full reset)
+.PHONY: compose-down
+compose-down: ## Stop the compose network and delete all volumes
 	docker compose down -v
+
+##@ Kubernetes network (Part 3 — needs Kind and Helmfile)
+
+KIND_CLUSTER ?= corda-local
+HELMFILE     ?= helmfile
+
+.PHONY: kind-up
+kind-up: ## Create a local Kind cluster (idempotent)
+	@command -v kind >/dev/null || { echo "skip: kind not installed"; exit 0; }
+	kind create cluster --name $(KIND_CLUSTER) || true
+	kubectl config use-context kind-$(KIND_CLUSTER)
+
+.PHONY: network-up
+network-up: kind-up ## Bootstrap a 3-node Corda network on Kind via Helmfile
+	@command -v helmfile >/dev/null || { echo "skip: helmfile not installed"; exit 0; }
+	$(HELMFILE) -f deploy/helmfile.yaml apply
+
+.PHONY: network-down
+network-down: ## Destroy the Helmfile releases (leaves the Kind cluster)
+	@command -v helmfile >/dev/null || { echo "skip: helmfile not installed"; exit 0; }
+	$(HELMFILE) -f deploy/helmfile.yaml destroy
+
+.PHONY: network-status
+network-status: ## Show pod status in the corda namespace
+	kubectl -n corda get pods
+
+.PHONY: network-logs
+network-logs: ## Tail logs from all corda pods
+	kubectl -n corda logs -f --selector app.kubernetes.io/part-of=corda-network
+
+.PHONY: k8s-cluster-down
+k8s-cluster-down: network-down ## Destroy network and delete the Kind cluster
+	@command -v kind >/dev/null || { echo "skip: kind not installed"; exit 0; }
+	kind delete cluster --name $(KIND_CLUSTER)

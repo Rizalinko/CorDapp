@@ -1,0 +1,39 @@
+helmDefaults:
+  wait: true
+  waitForJobs: true
+  timeout: 900
+  createNamespace: true
+
+releases:
+  - name: corda-bootstrap
+    chart: charts/corda-bootstrap
+    namespace: corda
+    values:
+      - deploy/bootstrap/values.yaml
+
+  - name: notary
+    chart: charts/corda-node
+    namespace: corda
+    values:
+      - deploy/notary/values.prd.yaml
+      - deploy/notary/values.kind.yaml
+    needs:
+      - corda/corda-bootstrap
+
+  - name: node1
+    chart: charts/corda-node
+    namespace: corda
+    values:
+      - deploy/node1/values.prd.yaml
+      - deploy/node1/values.kind.yaml
+    needs:
+      - corda/corda-bootstrap
+
+  - name: node2
+    chart: charts/corda-node
+    namespace: corda
+    values:
+      - deploy/node2/values.prd.yaml
+      - deploy/node2/values.kind.yaml
+    needs:
+      - corda/corda-bootstrap

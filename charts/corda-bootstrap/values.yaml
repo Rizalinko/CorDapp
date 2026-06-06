@@ -1,0 +1,58 @@
+# -- corda-node image (must contain corda-bootstrapper.jar at /opt/corda/).
+image:
+  repository: ghcr.io/acmecorp/corda-node
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# -- kubectl image used by the publisher container to create K8s resources.
+kubectlImage: bitnami/kubectl:1.29
+
+# -- Per-node settings consumed by the bootstrapper: legal name and P2P address.
+# The p2pHost must match the K8s service name that corda-node creates
+# (release-name + "-corda-node-p2p.<namespace>.svc.cluster.local").
+nodes:
+  notary:
+    legalName: "O=AcmeCorp Notary, L=London, C=GB"
+    p2pHost: notary-corda-node-p2p.corda.svc.cluster.local
+    p2pPort: 10200
+    role: notary
+    validating: false
+  node1:
+    legalName: "O=AcmeCorp Node1, L=London, C=GB"
+    p2pHost: node1-corda-node-p2p.corda.svc.cluster.local
+    p2pPort: 10200
+    role: node
+  node2:
+    legalName: "O=AcmeCorp Node2, L=London, C=GB"
+    p2pHost: node2-corda-node-p2p.corda.svc.cluster.local
+    p2pPort: 10200
+    role: node
+
+# -- Passwords written into per-node Secrets (keys: rpc-password,
+# keystore-password, truststore-password).
+# The bootstrapper always uses cordacadevpass for keystores.
+# Change rpc for non-dev clusters.
+passwords:
+  rpc: "test"
+  keystore: "cordacadevpass"
+  truststore: "cordacadevpass"
+
+# -- Name of the ConfigMap created with network-parameters and nodeInfo files.
+# Must match network.existingNetworkParams in corda-node values.
+networkParamsConfigMap: corda-network-params
+
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: 1Gi
+  limits:
+    memory: 2Gi

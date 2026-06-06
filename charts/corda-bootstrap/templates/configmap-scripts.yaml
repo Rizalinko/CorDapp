@@ -1,0 +1,95 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "corda-bootstrap.fullname" . }}-scripts
+  labels:
+    {{- include "corda-bootstrap.labels" . | nindent 4 }}
+data:
+  bootstrap.sh: |
+    #!/bin/sh
+    set -eu
+    B=/bootstrap
+
+    log() { printf '[bootstrap] %s\n' "$*"; }
+
+    log "checking idempotency"
+    if [ -f "${B}/network-parameters" ]; then
+      log "network already bootstrapped, skipping"
+      exit 0
+    fi
+
+    log "staging node.conf files"
+    for node in notary node1 node2; do
+      mkdir -p "${B}/${node}"
+      cp "/nodeconfs/${node}.conf" "${B}/${node}/node.conf"
+    done
+
+    log "running Corda network bootstrapper"
+    java -jar /opt/corda/corda-bootstrapper.jar \
+      --dir "${B}" \
+      --copy-cordapps No
+
+    log "bootstrap complete"
+
+  publish.sh: |
+    #!/bin/sh
+    set -eu
+
+    NS="${OUTPUT_NAMESPACE}"
+    B="${BOOTSTRAP_DIR}"
+
+    log() { printf '[publish] %s\n' "$*"; }
+
+    b64() { base64 < "$1" | tr -d '\n'; }
+
+    apply_cert_secret() {
+      local name="$1"
+      local dir="$2"
+      log "creating cert secret ${name}"
+      kubectl apply -n "${NS}" -f - << YAML
+    apiVersion: v1
+    kind: Secret
+    metadata:
+      name: ${name}
+      namespace: ${NS}
+    type: Opaque
+    binaryData:
+      nodekeystore.jks: $(b64 "${dir}/certificates/nodekeystore.jks")
+      sslkeystore.jks: $(b64 "${dir}/certificates/sslkeystore.jks")
+      truststore.jks: $(b64 "${dir}/certificates/truststore.jks")
+    YAML
+    }
+
+    apply_cert_secret corda-notary-certs "${B}/notary"
+    apply_cert_secret corda-node1-certs  "${B}/node1"
+    apply_cert_secret corda-node2-certs  "${B}/node2"
+
+    log "creating network-params ConfigMap"
+    BDATA="  network-parameters: $(b64 "${B}/network-parameters")"
+    for f in "${B}/notary/additional-node-infos/nodeInfo-"*; do
+      fname=$(basename "${f}")
+      BDATA="${BDATA}
+      ${fname}: $(b64 "${f}")"
+    done
+
+    kubectl apply -n "${NS}" -f - << YAML
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: corda-network-params
+      namespace: ${NS}
+    binaryData:
+    ${BDATA}
+    YAML
+
+    log "creating per-node password secrets"
+    for node in notary node1 node2; do
+      kubectl create secret generic "corda-${node}-secrets" \
+        --namespace="${NS}" \
+        --from-literal="rpc-password=${RPC_PASSWORD}" \
+        --from-literal="keystore-password=${KEYSTORE_PASSWORD}" \
+        --from-literal="truststore-password=${TRUSTSTORE_PASSWORD}" \
+        --dry-run=client --output=yaml | kubectl apply -f -
+    done
+
+    log "all resources published"
