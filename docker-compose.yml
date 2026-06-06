@@ -1,0 +1,108 @@
+# =============================================================================
+# Minimal local Corda network for development/testing: 1 notary + 2 nodes.
+#
+#   make network-up      # build images, bootstrap, start the network
+#   make network-status  # health of each service
+#   make network-down    # stop and wipe volumes
+#
+# Flow: the one-shot `bootstrap` service generates the network trust root,
+# network-parameters and every NodeInfo into per-node volumes; the three node
+# services then start from those volumes. See compose/bootstrap.sh.
+# =============================================================================
+name: acmecorp-corda
+
+x-corda-node: &corda-node
+  image: ${NODE_IMAGE:-corda-node:local}
+  restart: unless-stopped
+  environment:
+    JAVA_OPTS: "-Xmx768m -XX:+UseG1GC"
+  healthcheck:
+    test: ["CMD", "/opt/corda/bin/healthcheck.sh"]
+    interval: 30s
+    timeout: 5s
+    start_period: 240s
+    retries: 6
+
+volumes:
+  notary:
+  node1:
+  node2:
+  pgdata:
+
+services:
+  # --- PostgreSQL (required by Corda 4.12+; H2 was dropped) -----------------
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: corda
+      POSTGRES_PASSWORD: devpassword
+      POSTGRES_DB: corda
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./compose/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U corda"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # --- one-shot: establish the network map / trust root / parameters ---------
+  bootstrap:
+    image: ${NODE_IMAGE:-corda-node:local}
+    user: "0:0"
+    entrypoint: ["/bin/bash", "/scripts/bootstrap.sh"]
+    environment:
+      NODES: "notary node1 node2"
+      CORDA_UID: "1000"
+      CORDA_GID: "1000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./compose/bootstrap:/input:ro
+      - ./compose/bootstrap.sh:/scripts/bootstrap.sh:ro
+      - notary:/bootstrap/notary
+      - node1:/bootstrap/node1
+      - node2:/bootstrap/node2
+
+  # --- notary ----------------------------------------------------------------
+  notary:
+    <<: *corda-node
+    hostname: notary
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    volumes:
+      - notary:/var/lib/corda
+    ports:
+      - "10201:10201"   # RPC (dev convenience only; restrict in prod)
+
+  # --- node1 (AcmeCorp counterparty A) ---------------------------------------
+  node1:
+    <<: *corda-node
+    hostname: node1
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    volumes:
+      - node1:/var/lib/corda
+    ports:
+      - "10211:10201"
+
+  # --- node2 (AcmeCorp counterparty B) ---------------------------------------
+  node2:
+    <<: *corda-node
+    hostname: node2
+    depends_on:
+      bootstrap:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    volumes:
+      - node2:/var/lib/corda
+    ports:
+      - "10221:10201"
