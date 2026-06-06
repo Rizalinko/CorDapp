@@ -80,7 +80,7 @@ jobs:
     permissions:
       packages: write
     env:
-      OCI_REGISTRY: oci://ghcr.io/acmecorp/charts
+      OCI_REGISTRY: oci://ghcr.io/rizalinko/charts
     steps:
       - uses: actions/checkout@v4
 

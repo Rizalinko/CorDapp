@@ -51,17 +51,24 @@ jobs:
   build-scan-smoke:
     needs: lint
     runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
 
       - name: Build jar-image
         uses: docker/build-push-action@v6
         with:
           context: docker/jar-image
-          load: true
-          tags: ${{ env.JAR_IMAGE }}
+          push: true
+          tags: localhost:5000/corda-jar:ci
           cache-from: type=gha,scope=jar
           cache-to: type=gha,mode=max,scope=jar
 
@@ -72,23 +79,20 @@ jobs:
           load: true
           tags: ${{ env.NODE_IMAGE }}
           build-args: |
-            JAR_IMAGE=${{ env.JAR_IMAGE }}
+            JAR_IMAGE=localhost:5000/corda-jar:ci
           cache-from: type=gha,scope=node
           cache-to: type=gha,mode=max,scope=node
 
-      - name: Install Trivy
-        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
-
       - name: Trivy scan (node-image)
-        run: |
-          trivy image \
-            --severity CRITICAL,HIGH \
-            --format sarif \
-            --output trivy-node.sarif \
-            --ignore-unfixed \
-            --ignorefile .trivyignore \
-            --exit-code 0 \
-            "${{ env.NODE_IMAGE }}"
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.NODE_IMAGE }}
+          format: sarif
+          output: trivy-node.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignore: .trivyignore
+          exit-code: 0
 
       - name: Upload Trivy SARIF
         if: always()
