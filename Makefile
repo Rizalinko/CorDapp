@@ -11,6 +11,8 @@ CORDA_VERSION ?= 4.14
 IMAGE_TAG     ?= $(CORDA_VERSION)-dev
 JAR_IMAGE     ?= corda-jar:local
 NODE_IMAGE    ?= corda-node:local
+CHART         ?= charts/corda-node
+KUBE_VERSION  ?= 1.29.0
 
 .PHONY: help
 help: ## Show this help
@@ -22,7 +24,7 @@ help: ## Show this help
 ##@ Validation (local, no daemon required)
 
 .PHONY: lint
-lint: lint-shell lint-yaml lint-docker lint-actions ## Run all static checks that apply to the current tree
+lint: lint-shell lint-yaml lint-docker lint-actions lint-helm ## Run all static checks that apply to the current tree
 
 .PHONY: lint-shell
 lint-shell: ## ShellCheck all shell scripts
@@ -34,10 +36,11 @@ lint-shell: ## ShellCheck all shell scripts
 .PHONY: lint-yaml
 lint-yaml: ## Validate that all YAML parses
 	@command -v yq >/dev/null || { echo "skip: yq not installed"; exit 0; }
-	@files=$$(git ls-files --cached --others --exclude-standard '*.yml' '*.yaml' 2>/dev/null); \
-	if [ -z "$$files" ]; then echo "lint-yaml: no YAML yet"; else \
+	@files=$$(git ls-files --cached --others --exclude-standard '*.yml' '*.yaml' 2>/dev/null \
+	  | grep -v '/templates/' || true); \
+	if [ -z "$$files" ]; then echo "lint-yaml: no plain YAML yet"; else \
 	  for f in $$files; do yq -e 'true' "$$f" >/dev/null || { echo "INVALID: $$f"; exit 1; }; done; \
-	  echo "lint-yaml: OK ($$(echo $$files | wc -w) files)"; fi
+	  echo "lint-yaml: OK ($$(echo $$files | wc -w) files; helm templates checked by lint-helm)"; fi
 
 .PHONY: lint-docker
 lint-docker: ## hadolint all Dockerfiles
@@ -50,6 +53,24 @@ lint-actions: ## actionlint all GitHub workflow files
 	@command -v actionlint >/dev/null || { echo "skip: actionlint not installed"; exit 0; }
 	@files=$$(git ls-files --cached --others --exclude-standard '.github/workflows/*.yml' '.github/workflows/*.yaml' 2>/dev/null); \
 	if [ -z "$$files" ]; then echo "lint-actions: no workflows yet"; else actionlint $$files && echo "lint-actions: OK"; fi
+
+##@ Helm chart (Part 2)
+
+.PHONY: lint-helm
+lint-helm: ## helm lint + template + kubeconform the chart with each prod overlay
+	@command -v helm >/dev/null || { echo "skip: helm not installed"; exit 0; }
+	helm lint $(CHART) -f deploy/production/node1.values.yaml
+	@command -v kubeconform >/dev/null || { echo "skip kubeconform: not installed"; exit 0; }
+	@for f in deploy/production/*.values.yaml; do \
+	  echo ">> template+validate $$f"; \
+	  helm template r $(CHART) -n corda -f "$$f" \
+	    | kubeconform -strict -summary -kubernetes-version $(KUBE_VERSION) -schema-location default; \
+	done
+
+.PHONY: docs-helm
+docs-helm: ## Regenerate the chart README from values (helm-docs)
+	@command -v helm-docs >/dev/null || { echo "skip: helm-docs not installed"; exit 0; }
+	helm-docs --chart-search-root=charts --log-level=warning
 
 .PHONY: scan-config
 scan-config: ## Trivy misconfiguration scan (no Docker daemon needed)
