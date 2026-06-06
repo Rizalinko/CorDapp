@@ -1,0 +1,111 @@
+name: docker-image
+
+# Part 1 CI: lint the Dockerfiles/scripts, build both images, scan with Trivy,
+# then smoke-test the full local network with docker-compose. This is the
+# "validate in pipeline" half of every Part 1 change. Part 5 extends this into
+# the full release pipeline (semver tags, push, signing).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docker/**
+      - compose/**
+      - scripts/wait-healthy.sh
+      - docker-compose.yml
+      - .github/workflows/docker-image.yml
+  pull_request:
+    paths:
+      - docker/**
+      - compose/**
+      - scripts/wait-healthy.sh
+      - docker-compose.yml
+      - .github/workflows/docker-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  JAR_IMAGE: corda-jar:ci
+  NODE_IMAGE: corda-node:ci
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: hadolint (jar-image)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/jar-image/Dockerfile
+      - name: hadolint (node-image)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/node-image/Dockerfile
+      - name: shellcheck
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: .
+
+  build-scan-smoke:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build jar-image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/jar-image
+          load: true
+          tags: ${{ env.JAR_IMAGE }}
+          cache-from: type=gha,scope=jar
+          cache-to: type=gha,mode=max,scope=jar
+
+      - name: Build node-image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/node-image
+          load: true
+          tags: ${{ env.NODE_IMAGE }}
+          build-args: |
+            JAR_IMAGE=${{ env.JAR_IMAGE }}
+          cache-from: type=gha,scope=node
+          cache-to: type=gha,mode=max,scope=node
+
+      - name: Trivy scan (node-image)
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          image-ref: ${{ env.NODE_IMAGE }}
+          format: sarif
+          output: trivy-node.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          # Report-only for now: surface findings without blocking. Part 5
+          # flips this to exit-code 1 once a baseline is agreed with AcmeCorp.
+          exit-code: '0'
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-node.sarif
+          category: trivy-node-image
+
+      - name: Smoke test — bring up the local network
+        run: NODE_IMAGE=${{ env.NODE_IMAGE }} docker compose up -d
+
+      - name: Wait for all nodes to become healthy
+        run: TIMEOUT=600 ./scripts/wait-healthy.sh notary node1 node2
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
