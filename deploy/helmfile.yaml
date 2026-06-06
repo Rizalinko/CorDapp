@@ -1,3 +1,8 @@
+environments:
+  default: {}
+  staging: {}
+  production: {}
+
 helmDefaults:
   wait: true
   waitForJobs: true
@@ -16,6 +21,11 @@ releases:
     namespace: corda
     values:
       - deploy/notary/values.yaml
+      {{- if eq .Environment.Name "production" }}
+      - deploy/notary/values.prd.yaml
+      {{- end }}
+      - image:
+          tag: {{ env "IMAGE_TAG" | default "" }}
     needs:
       - corda/corda-bootstrap
 
@@ -24,6 +34,11 @@ releases:
     namespace: corda
     values:
       - deploy/node1/values.yaml
+      {{- if eq .Environment.Name "production" }}
+      - deploy/node1/values.prd.yaml
+      {{- end }}
+      - image:
+          tag: {{ env "IMAGE_TAG" | default "" }}
     needs:
       - corda/corda-bootstrap
 
@@ -32,5 +47,10 @@ releases:
     namespace: corda
     values:
       - deploy/node2/values.yaml
+      {{- if eq .Environment.Name "production" }}
+      - deploy/node2/values.prd.yaml
+      {{- end }}
+      - image:
+          tag: {{ env "IMAGE_TAG" | default "" }}
     needs:
       - corda/corda-bootstrap
