@@ -1,0 +1,64 @@
+# Production values — Notary.
+# Helm release name: notary   (helm upgrade --install notary charts/corda-node -f this)
+role: notary
+notary:
+  validating: false          # non-validating notary (sees only references, not contents)
+
+legalName: "O=AcmeCorp Notary, L=London, C=GB"
+devMode: false
+
+image:
+  repository: ghcr.io/acmecorp/corda-node
+  tag: "4.14.0"              # pin to an immutable release tag (CI sets semver+sha)
+  pullPolicy: IfNotPresent
+
+jvm:
+  opts: "-Xmx3g -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
+
+db:
+  type: postgresql
+  host: corda-prod.postgres.database.azure.com
+  port: 5432
+  name: notary
+  user: notary
+  schema: notary
+
+# Secrets synced from Azure Key Vault (Part 6) — keys: rpc-password, db-password,
+# keystore-password, truststore-password.
+secrets:
+  existingSecret: corda-notary-secrets
+
+# Keystores from node registration / Key Vault, staged onto the PVC.
+certificates:
+  existingSecret: corda-notary-certs
+
+# Shared network-parameters + every NodeInfo from the bootstrap job (Part 3).
+network:
+  existingNetworkParams: corda-network-params
+
+config:
+  mode: generate
+
+persistence:
+  enabled: true
+  storageClass: managed-csi-premium
+  size: 50Gi
+
+resources:
+  requests:
+    cpu: "2"
+    memory: 4Gi
+  limits:
+    memory: 4Gi
+
+networkPolicy:
+  enabled: true
+  rpcAllowedFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: corda-ops
+
+service:
+  # ClusterIP for an in-cluster network; switch to LoadBalancer to expose P2P
+  # to counterparties outside the cluster.
+  p2pType: ClusterIP

@@ -31,14 +31,14 @@ Kubernetes: `>=1.27.0-0`
 | config.mode | string | `"generate"` | "generate": the entrypoint renders node.conf from env on every start (non-secret values here, secrets from `existingSecret`). "mounted": supply a complete node.conf via `existingConfigMap` (e.g. a bootstrapped network). |
 | cordapps | object | `{"loader":{"command":[],"enabled":false,"image":""}}` | ------------------------------------------------------------------------- |
 | cordapps.loader | object | `{"command":[],"enabled":false,"image":""}` | initContainer image + commands to stage CorDapp jars into cordapps/. Empty = use whatever the image baked into cordapps-baked/ (Part 4). |
-| db | object | `{"host":"","name":"corda","port":5432,"schema":"corda","type":"h2","user":"corda"}` | ------------------------------------------------------------------------- |
-| db.type | string | `"h2"` | "h2" or "postgresql". Default is h2 (no external dependency); override to postgresql in production. |
+| db | object | `{"host":"","name":"corda","port":5432,"schema":"corda","type":"postgresql","user":"corda"}` | ------------------------------------------------------------------------- |
+| db.type | string | `"postgresql"` | "h2" or "postgresql". |
 | devMode | bool | `false` | devMode disables PKI/password enforcement and uses Corda dev certs. MUST be false in production. |
 | image.pullPolicy | string | `"IfNotPresent"` |  |
 | image.repository | string | `"ghcr.io/acmecorp/corda-node"` | node-image repository (built in Part 1). |
 | image.tag | string | `""` | Image tag. Pin to an immutable semver+sha tag in production. |
 | imagePullSecrets | list | `[]` | imagePullSecrets for private registries. |
-| jvm.opts | string | `"-Xmx1500m -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"` | Passed verbatim as JAVA_OPTS. Keep -Xmx within the pod memory limit. |
+| jvm.opts | string | `"-Xmx2g -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"` | Passed verbatim as JAVA_OPTS. Keep -Xmx within the pod memory limit. |
 | legalName | string | `""` | X.500 legal name for this node, e.g. "O=Node1, L=London, C=GB". Required. |
 | migrations.enabled | bool | `true` |  |
 | network | object | `{"compatibilityZoneUrl":"","existingNetworkParams":""}` | ------------------------------------------------------------------------- |
@@ -49,7 +49,7 @@ Kubernetes: `>=1.27.0-0`
 | nodeSelector | object | `{}` |  |
 | notary | object | `{"validating":false}` | ------------------------------------------------------------------------- |
 | notary.validating | bool | `false` | Validating vs non-validating notary. |
-| persistence | object | `{"accessModes":["ReadWriteOnce"],"enabled":true,"existingClaim":"","size":"10Gi","storageClass":""}` | ------------------------------------------------------------------------- |
+| persistence | object | `{"accessModes":["ReadWriteOnce"],"enabled":true,"existingClaim":"","size":"20Gi","storageClass":""}` | ------------------------------------------------------------------------- |
 | persistence.existingClaim | string | `""` | Mount an existing PVC instead of a volumeClaimTemplate. |
 | podAnnotations | object | `{}` |  |
 | podDisruptionBudget.enabled | bool | `true` |  |
@@ -64,7 +64,7 @@ Kubernetes: `>=1.27.0-0`
 | ports.rpcAdmin | int | `10202` |  |
 | priorityClassName | string | `""` |  |
 | probes.startupSeconds | int | `600` |  |
-| resources | object | `{"limits":{"memory":"2Gi"},"requests":{"cpu":"500m","memory":"2Gi"}}` | ------------------------------------------------------------------------- |
+| resources | object | `{"limits":{"memory":"3Gi"},"requests":{"cpu":"1","memory":"3Gi"}}` | ------------------------------------------------------------------------- |
 | role | string | `"node"` | Corda role: "node" (regular participant) or "notary". |
 | rpc.user | string | `"corda"` |  |
 | secrets | object | `{"create":false,"data":{"db-password":"","keystore-password":"","rpc-password":"","truststore-password":""},"existingSecret":""}` | ------------------------------------------------------------------------- |
