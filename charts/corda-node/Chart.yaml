@@ -1,0 +1,21 @@
+apiVersion: v2
+name: corda-node
+description: >-
+  Deploy a single Corda Open Source 4.x node — regular node OR notary — to
+  Kubernetes. One parameterized chart covers both roles (a notary is a node with
+  a notary{} block); pick the role in values.
+type: application
+# Chart version (semver, bumped on chart changes) and the default app version.
+version: 0.1.0
+appVersion: "4.14"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/acmecorp/corda-platform
+sources:
+  - https://github.com/acmecorp/corda-platform
+keywords:
+  - corda
+  - blockchain
+  - dlt
+maintainers:
+annotations:
+  category: Blockchain

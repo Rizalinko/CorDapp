@@ -1,0 +1,189 @@
+# Default values for corda-node.
+# Defaults are safe for a non-production, single-node trial. Production overlays
+# (Node1/Node2/Notary) live in charts/corda-node/ci/ and deploy/ — see Part 3.
+
+# -- Corda role: "node" (regular participant) or "notary".
+role: node
+
+# -- X.500 legal name for this node, e.g. "O=Node1, L=London, C=GB". Required.
+legalName: ""
+
+image:
+  # -- node-image repository (built in Part 1).
+  repository: ghcr.io/acmecorp/corda-node
+  # -- Image tag. Pin to an immutable semver+sha tag in production.
+  tag: ""              # defaults to .Chart.appVersion when empty
+  pullPolicy: IfNotPresent
+# -- imagePullSecrets for private registries.
+imagePullSecrets: []
+
+ports:
+  p2p: 10200
+  rpc: 10201
+  rpcAdmin: 10202
+
+# -- devMode disables PKI/password enforcement and uses Corda dev certs.
+# MUST be false in production.
+devMode: false
+
+# JVM tuning for the node process.
+jvm:
+  # -- Passed verbatim as JAVA_OPTS. Keep -Xmx within the pod memory limit.
+  opts: "-Xmx2g -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
+
+# ---------------------------------------------------------------------------
+# node.conf generation
+# ---------------------------------------------------------------------------
+config:
+  # -- "generate": the entrypoint renders node.conf from env on every start
+  # (non-secret values here, secrets from `existingSecret`). "mounted": supply a
+  # complete node.conf via `existingConfigMap` (e.g. a bootstrapped network).
+  mode: generate
+  # -- Name of a ConfigMap whose `node.conf` key is mounted verbatim (mode=mounted).
+  existingConfigMap: ""
+
+# ---------------------------------------------------------------------------
+# Database (the node vault). H2 for trials; PostgreSQL for production.
+# ---------------------------------------------------------------------------
+db:
+  # -- "h2" or "postgresql".
+  type: postgresql
+  host: ""
+  port: 5432
+  name: corda
+  user: corda
+  schema: corda
+  # The password is read from the secret below (key: db-password).
+
+# ---------------------------------------------------------------------------
+# Notary settings (used only when role=notary).
+# ---------------------------------------------------------------------------
+notary:
+  # -- Validating vs non-validating notary.
+  validating: false
+
+# ---------------------------------------------------------------------------
+# Network identity: how this node joins the zone.
+# ---------------------------------------------------------------------------
+network:
+  # -- Compatibility-zone URL (doorman + network map). Leave empty for a
+  # bootstrapped network (network-parameters supplied via `networkParameters`).
+  compatibilityZoneUrl: ""
+  # -- ConfigMap/Secret carrying `network-parameters` + `additional-node-infos`
+  # for a bootstrapped network (set by the Part 3 bootstrap job).
+  existingNetworkParams: ""
+
+# ---------------------------------------------------------------------------
+# Secrets. We never put passwords in ConfigMaps. Provide a Secret with keys:
+#   rpc-password, db-password, keystore-password, truststore-password
+# Reference an existing one (recommended: synced from Key Vault, Part 6) or let
+# the chart create one from `create`/`data` for trials.
+# ---------------------------------------------------------------------------
+secrets:
+  existingSecret: ""
+  create: false
+  # -- Inline values for trials only (base64 NOT required; values are templated
+  # into a Secret). Do not commit real secrets here.
+  data:
+    rpc-password: ""
+    db-password: ""
+    keystore-password: ""
+    truststore-password: ""
+
+# RPC user the node exposes for clients/operators.
+rpc:
+  user: corda
+
+# ---------------------------------------------------------------------------
+# Certificates / keystores. In production these come from node registration or
+# a secrets store and are mounted into certificates/. For bootstrapped/dev
+# networks they are produced by the bootstrapper onto the PVC.
+# ---------------------------------------------------------------------------
+certificates:
+  # -- Name of a Secret mounted into /var/lib/corda/certificates (keystores +
+  # truststore). Empty = rely on PVC contents (bootstrapped/dev).
+  existingSecret: ""
+
+# ---------------------------------------------------------------------------
+# CorDapps. Default: mounted/baked (Part 4 artifact image). Optionally pull a
+# set of jars via an initContainer from an OCI artifact or URL list.
+# ---------------------------------------------------------------------------
+cordapps:
+  # -- initContainer image + commands to stage CorDapp jars into cordapps/.
+  # Empty = use whatever the image baked into cordapps-baked/ (Part 4).
+  loader:
+    enabled: false
+    image: ""
+    command: []
+
+# ---------------------------------------------------------------------------
+# Persistence (the node base directory: certs, persistence, cordapps, logs).
+# ---------------------------------------------------------------------------
+persistence:
+  enabled: true
+  storageClass: ""
+  accessModes: ["ReadWriteOnce"]
+  size: 20Gi
+  # -- Mount an existing PVC instead of a volumeClaimTemplate.
+  existingClaim: ""
+
+# ---------------------------------------------------------------------------
+# Workload settings.
+# ---------------------------------------------------------------------------
+resources:
+  requests:
+    cpu: "1"
+    memory: 3Gi
+  limits:
+    memory: 3Gi
+
+# Run the DB migration job (helm hook) before the node starts. Required on
+# first deploy / version upgrades when using PostgreSQL.
+migrations:
+  enabled: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false   # Corda writes capsule cache + logs to base dir
+  capabilities:
+    drop: ["ALL"]
+
+service:
+  # -- P2P service type. ClusterIP for in-cluster; LoadBalancer to expose P2P
+  # to external counterparties.
+  p2pType: ClusterIP
+  annotations: {}
+
+# Restrict RPC, allow P2P between nodes.
+networkPolicy:
+  enabled: true
+  # -- Extra namespace/pod selectors allowed to reach the RPC port.
+  rpcAllowedFrom: []
+
+# Pod Disruption Budget (a node is a singleton; keep it available).
+podDisruptionBudget:
+  enabled: true
+
+# Readiness/liveness probe timing (Corda first start is slow).
+probes:
+  startupSeconds: 600
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+podAnnotations: {}
+podLabels: {}
+priorityClassName: ""

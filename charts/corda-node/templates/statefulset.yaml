@@ -1,0 +1,179 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "corda-node.fullname" . }}
+  labels:
+    {{- include "corda-node.labels" . | nindent 4 }}
+spec:
+  # A Corda OS node is a singleton (its legal identity is unique on the network).
+  replicas: 1
+  serviceName: {{ include "corda-node.fullname" . }}-hl
+  selector:
+    matchLabels:
+      {{- include "corda-node.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "corda-node.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}{{- toYaml . | nindent 8 }}{{- end }}
+      annotations:
+        # Roll the pod when config/secret content changes.
+        checksum/env: {{ include (print $.Template.BasePath "/configmap-env.yaml") . | sha256sum }}
+        {{- if and .Values.secrets.create (not .Values.secrets.existingSecret) }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}{{- toYaml . | nindent 8 }}{{- end }}
+    spec:
+      serviceAccountName: {{ include "corda-node.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      initContainers:
+        {{- if .Values.certificates.existingSecret }}
+        - name: materialize-certs
+          image: {{ include "corda-node.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - cp -L /certs-src/* /var/lib/corda/certificates/ && echo "certificates staged"
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/corda}
+            - {name: certs-src, mountPath: /certs-src, readOnly: true}
+        {{- end }}
+        {{- if .Values.network.existingNetworkParams }}
+        - name: materialize-netparams
+          image: {{ include "corda-node.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - cp -RL /netparams-src/* /var/lib/corda/ && echo "network params staged"
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/corda}
+            - {name: netparams-src, mountPath: /netparams-src, readOnly: true}
+        {{- end }}
+        {{- if .Values.cordapps.loader.enabled }}
+        - name: cordapp-loader
+          image: {{ .Values.cordapps.loader.image }}
+          command: {{ toYaml .Values.cordapps.loader.command | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/corda}
+        {{- end }}
+      containers:
+        - name: corda
+          image: {{ include "corda-node.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["/opt/corda/bin/entrypoint.sh", "node"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "corda-node.fullname" . }}-env
+          env:
+            - name: RPC_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "corda-node.secretName" . }}, key: rpc-password}
+            {{- if eq .Values.db.type "postgresql" }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "corda-node.secretName" . }}, key: db-password}
+            {{- end }}
+            {{- if not .Values.devMode }}
+            - name: KEY_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "corda-node.secretName" . }}, key: keystore-password}
+            - name: TRUST_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "corda-node.secretName" . }}, key: truststore-password}
+            {{- end }}
+          ports:
+            - {name: p2p, containerPort: {{ .Values.ports.p2p }}}
+            - {name: rpc, containerPort: {{ .Values.ports.rpc }}}
+            - {name: rpc-admin, containerPort: {{ .Values.ports.rpcAdmin }}}
+          startupProbe:
+            exec:
+              command: ["/opt/corda/bin/healthcheck.sh"]
+            periodSeconds: 10
+            failureThreshold: {{ div .Values.probes.startupSeconds 10 }}
+          readinessProbe:
+            exec:
+              command: ["/opt/corda/bin/healthcheck.sh"]
+            periodSeconds: 15
+            timeoutSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["/opt/corda/bin/healthcheck.sh"]
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 4
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/corda
+            {{- if eq .Values.config.mode "mounted" }}
+            - name: nodeconf
+              mountPath: /var/lib/corda/node.conf
+              subPath: node.conf
+              readOnly: true
+            {{- end }}
+      volumes:
+        {{- if .Values.persistence.existingClaim }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim }}
+        {{- else if not .Values.persistence.enabled }}
+        - name: data
+          emptyDir: {}
+        {{- end }}
+        {{- if eq .Values.config.mode "mounted" }}
+        - name: nodeconf
+          configMap:
+            name: {{ required "config.existingConfigMap is required when config.mode=mounted" .Values.config.existingConfigMap }}
+        {{- end }}
+        {{- if .Values.certificates.existingSecret }}
+        - name: certs-src
+          secret:
+            secretName: {{ .Values.certificates.existingSecret }}
+        {{- end }}
+        {{- if .Values.network.existingNetworkParams }}
+        - name: netparams-src
+          configMap:
+            name: {{ .Values.network.existingNetworkParams }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "corda-node.labels" . | nindent 10 }}
+      spec:
+        accessModes: {{ toYaml .Values.persistence.accessModes | nindent 10 }}
+        {{- if .Values.persistence.storageClass }}
+        storageClassName: {{ .Values.persistence.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}
+  {{- end }}
