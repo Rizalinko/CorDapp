@@ -38,7 +38,7 @@ lint-shell: ## ShellCheck all shell scripts
 lint-yaml: ## Validate that all YAML parses
 	@command -v yq >/dev/null || { echo "skip: yq not installed"; exit 0; }
 	@files=$$(git ls-files --cached --others --exclude-standard '*.yml' '*.yaml' 2>/dev/null \
-	  | grep -v '/templates/' || true); \
+	  | grep -Ev '/templates/|helmfile\.yaml' || true); \
 	if [ -z "$$files" ]; then echo "lint-yaml: no plain YAML yet"; else \
 	  for f in $$files; do yq -e 'true' "$$f" >/dev/null || { echo "INVALID: $$f"; exit 1; }; done; \
 	  echo "lint-yaml: OK ($$(echo $$files | wc -w) files; helm templates checked by lint-helm)"; fi

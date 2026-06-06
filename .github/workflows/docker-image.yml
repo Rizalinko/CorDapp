@@ -138,7 +138,7 @@ jobs:
         run: |
           SHA=$(echo "${{ github.sha }}" | head -c7)
           CORDA="${{ env.CORDA_VERSION }}"
-          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             {
               echo "jar_tags<<EOF"
               printf '%s\n' \
