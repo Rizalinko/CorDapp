@@ -50,6 +50,12 @@ variable "aks_max_node_count" {
   default     = 6
 }
 
+variable "aks_api_server_authorized_ip_ranges" {
+  description = "CIDR ranges allowed to reach the AKS API server. Set in prod.tfvars to your egress IPs. Empty disables IP restriction."
+  type        = list(string)
+  default     = []
+}
+
 # ACR
 
 variable "acr_sku" {

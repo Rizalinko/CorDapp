@@ -39,19 +39,20 @@ module "keyvault" {
 }
 
 module "aks" {
-  source              = "./modules/aks"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  prefix              = local.prefix
-  aks_subnet_id       = module.networking.aks_subnet_id
-  system_vm_size      = var.aks_system_vm_size
-  node_vm_size        = var.aks_node_vm_size
-  node_count          = var.aks_node_count
-  min_node_count      = var.aks_min_node_count
-  max_node_count      = var.aks_max_node_count
-  acr_id              = module.acr.id
-  keyvault_id         = module.keyvault.id
-  tags                = local.common_tags
+  source                          = "./modules/aks"
+  resource_group_name             = azurerm_resource_group.main.name
+  location                        = azurerm_resource_group.main.location
+  prefix                          = local.prefix
+  aks_subnet_id                   = module.networking.aks_subnet_id
+  system_vm_size                  = var.aks_system_vm_size
+  node_vm_size                    = var.aks_node_vm_size
+  node_count                      = var.aks_node_count
+  min_node_count                  = var.aks_min_node_count
+  max_node_count                  = var.aks_max_node_count
+  api_server_authorized_ip_ranges = var.aks_api_server_authorized_ip_ranges
+  acr_id                          = module.acr.id
+  keyvault_id                     = module.keyvault.id
+  tags                            = local.common_tags
 }
 
 module "postgresql" {

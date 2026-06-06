@@ -47,8 +47,13 @@ resource "azurerm_kubernetes_cluster" "main" {
 
   network_profile {
     network_plugin = "azure"
+    network_policy = "azure"
     service_cidr   = "172.16.0.0/16"
     dns_service_ip = "172.16.0.10"
+  }
+
+  api_server_access_profile {
+    authorized_ip_ranges = length(var.api_server_authorized_ip_ranges) > 0 ? var.api_server_authorized_ip_ranges : null
   }
 
   # CSI secrets provider enables mounting Key Vault secrets as Kubernetes volumes.

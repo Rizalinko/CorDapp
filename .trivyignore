@@ -1,4 +1,36 @@
 # Trivy ignore file — document every suppression with a reason and a review date.
-# Format: one CVE id per line. Prefer fixing/upgrading over ignoring.
+# Prefer fixing or upgrading over ignoring. Each entry must have a reason comment.
+# Review all suppressions when upgrading the azurerm provider (next: v4.0).
 #
-# (none yet — see docs/part1-docker.md "Image scanning" for the policy)
+# See docs/part1-docker.md "Image scanning" for the suppression policy.
+
+# AZU-0013: Key Vault network ACL does not block access by default.
+# The Terraform runner needs unrestricted write access to Key Vault during apply
+# (to store the generated PostgreSQL password). The production fix is a private
+# endpoint for Key Vault + private runner, not a network ACL that would break CI.
+# Review: enforce network ACLs once a private runner or VPN is in place.
+AZU-0013
+
+# AZU-0047: NSG rule allows unrestricted HTTPS ingress (port 443, source *).
+# Intentional: the AKS ingress controller exposes HTTPS to the public internet.
+# Restricting source IPs here would break the public API endpoint.
+AZU-0047
+
+# AZU-0051: NSG rule allows unrestricted outbound traffic (destination *).
+# Required: AKS nodes need unrestricted egress for image pulls (GHCR, MCR),
+# Azure management APIs, and DNS resolution. Azure Firewall is the correct
+# control plane for egress filtering — not NSG destination rules.
+AZU-0051
+
+# KSV-0109: ConfigMap value contains the string "--from-literal".
+# False positive: the bootstrap publish.sh script embeds a kubectl command that
+# uses --from-literal as a CLI flag. The actual secret values come from env vars
+# at runtime and are never stored in the ConfigMap.
+KSV-0109
+
+# KSV-0014: Bootstrap job containers do not set readOnlyRootFilesystem=true.
+# The bootstrapper init container writes network-parameters and node certificates
+# to an emptyDir (/bootstrap). The publisher container writes kubectl output.
+# readOnlyRootFilesystem would break both containers. The emptyDir is ephemeral
+# and contains no persistent secret material.
+KSV-0014

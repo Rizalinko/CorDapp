@@ -50,6 +50,12 @@ variable "keyvault_id" {
   type        = string
 }
 
+variable "api_server_authorized_ip_ranges" {
+  description = "CIDR ranges allowed to reach the AKS API server. Empty list disables IP restriction (dev only)."
+  type        = list(string)
+  default     = []
+}
+
 variable "tags" {
   type    = map(string)
   default = {}
