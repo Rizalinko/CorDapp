@@ -1,0 +1,20 @@
+auth:
+  username: corda
+  password: devpassword
+  database: cordanode1
+
+primary:
+  persistence:
+    size: 1Gi
+  initdb:
+    scripts:
+      init.sql: |
+        CREATE DATABASE cordanode2 OWNER corda;
+        CREATE DATABASE cordanotary OWNER corda;
+
+resources:
+  requests:
+    cpu: "100m"
+    memory: 256Mi
+  limits:
+    memory: 512Mi

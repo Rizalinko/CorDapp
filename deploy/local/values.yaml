@@ -1,11 +1,14 @@
-# Local Minikube overrides — applied on top of production values.
+# Local Kind overrides applied on top of the base per-node values.
 # Usage:
+#   make helm-local          # build image + load into Kind + install all three
+#
+# Or manually, one release at a time:
 #   helm upgrade --install notary charts/corda-node -n corda \
-#     -f deploy/production/notary.values.yaml -f deploy/local/values.yaml
-#   helm upgrade --install node1  charts/corda-node -n corda \
-#     -f deploy/production/node1.values.yaml  -f deploy/local/values.yaml
-#   helm upgrade --install node2  charts/corda-node -n corda \
-#     -f deploy/production/node2.values.yaml  -f deploy/local/values.yaml
+#     -f deploy/notary/values.yaml -f deploy/local/values.yaml -f deploy/local/notary.yaml
+#   helm upgrade --install node1 charts/corda-node -n corda \
+#     -f deploy/node1/values.yaml -f deploy/local/values.yaml -f deploy/local/node1.yaml
+#   helm upgrade --install node2 charts/corda-node -n corda \
+#     -f deploy/node2/values.yaml -f deploy/local/values.yaml -f deploy/local/node2.yaml
 
 # Use local minikube PostgreSQL instead of H2 (Corda 4.14 dropped H2)
 # DB name is overridden per-release via -f deploy/<node>/values.yaml
