@@ -1,0 +1,70 @@
+name: helm-chart
+
+# Part 2 CI: lint the chart, render it with every production overlay, validate
+# the output against the Kubernetes schemas, and check helm-docs is up to date.
+# Part 5 extends this to package + push the chart to a registry.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - charts/**
+      - deploy/**
+      - .github/workflows/helm-chart.yml
+  pull_request:
+    paths:
+      - charts/**
+      - deploy/**
+      - .github/workflows/helm-chart.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  KUBE_VERSION: "1.29.0"
+
+jobs:
+  lint-template-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+
+      - name: helm lint (with prod overlay)
+        run: helm lint charts/corda-node -f deploy/node1/values.prd.yaml
+
+      - name: Install kubeconform
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz \
+            | tar xz kubeconform
+          sudo mv kubeconform /usr/local/bin/
+
+      - name: Template + validate each production overlay
+        run: |
+          for f in deploy/*/values.prd.yaml; do
+            echo "::group::$f"
+            helm template r charts/corda-node -n corda -f "$f" \
+              | kubeconform -strict -summary \
+                  -kubernetes-version "${KUBE_VERSION}" \
+                  -schema-location default
+            echo "::endgroup::"
+          done
+
+  helm-docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify chart README is up to date
+        uses: docker://jnorwood/helm-docs:v1.14.2
+        with:
+          args: --chart-search-root=charts
+      - name: Fail if README drifted
+        run: |
+          if ! git diff --exit-code charts/corda-node/README.md; then
+            echo "::error::charts/corda-node/README.md is stale — run 'make docs-helm' and commit." >&2
+            exit 1
+          fi
