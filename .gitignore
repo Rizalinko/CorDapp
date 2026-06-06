@@ -1,0 +1,49 @@
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Corda runtime artifacts (never commit these)
+*.jar
+!**/gradle/wrapper/gradle-wrapper.jar
+artemis/
+brokers/
+certificates/
+additional-node-infos/
+network-parameters
+nodeInfo-*
+persistence.mv.db
+persistence.trace.db
+logs/
+*.log
+
+# Secrets / local env
+.env
+*.local
+*-secret.yaml
+*.tfvars
+!example.tfvars
+!*.example.tfvars
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+.terraform.lock.hcl
+
+# Helm
+charts/**/charts/
+*.tgz
+
+# Build / scan output
+build/
+dist/
+.scan/
+trivy-results*.json
+trivy-results*.sarif
