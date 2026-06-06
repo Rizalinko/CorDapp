@@ -51,6 +51,11 @@ lint-actions: ## actionlint all GitHub workflow files
 	@files=$$(git ls-files --cached --others --exclude-standard '.github/workflows/*.yml' '.github/workflows/*.yaml' 2>/dev/null); \
 	if [ -z "$$files" ]; then echo "lint-actions: no workflows yet"; else actionlint $$files && echo "lint-actions: OK"; fi
 
+.PHONY: scan-config
+scan-config: ## Trivy misconfiguration scan (no Docker daemon needed)
+	@command -v trivy >/dev/null || { echo "skip: trivy not installed"; exit 0; }
+	trivy config --severity HIGH,CRITICAL .
+
 ##@ Container images (Part 1 — needs Docker)
 
 .PHONY: build-jar
