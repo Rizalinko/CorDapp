@@ -29,7 +29,7 @@ devMode: false
 # JVM tuning for the node process.
 jvm:
   # -- Passed verbatim as JAVA_OPTS. Keep -Xmx within the pod memory limit.
-  opts: "-Xmx2g -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
+  opts: "-Xmx1500m -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
 
 # ---------------------------------------------------------------------------
 # node.conf generation
@@ -47,7 +47,7 @@ config:
 # ---------------------------------------------------------------------------
 db:
   # -- "h2" or "postgresql".
-  type: postgresql
+  type: h2
   host: ""
   port: 5432
   name: corda
@@ -123,7 +123,7 @@ persistence:
   enabled: true
   storageClass: ""
   accessModes: ["ReadWriteOnce"]
-  size: 20Gi
+  size: 10Gi
   # -- Mount an existing PVC instead of a volumeClaimTemplate.
   existingClaim: ""
 
@@ -132,10 +132,10 @@ persistence:
 # ---------------------------------------------------------------------------
 resources:
   requests:
-    cpu: "1"
-    memory: 3Gi
+    cpu: "500m"
+    memory: 2Gi
   limits:
-    memory: 3Gi
+    memory: 2Gi
 
 # Run the DB migration job (helm hook) before the node starts. Required on
 # first deploy / version upgrades when using PostgreSQL.

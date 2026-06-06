@@ -1,0 +1,64 @@
+# Local Kind overrides applied on top of the base per-node values.
+# Usage:
+#   make helm-local          # build image + load into Kind + install all three
+#
+# Or manually, one release at a time:
+#   helm upgrade --install notary charts/corda-node -n corda \
+#     -f deploy/notary/values.yaml -f deploy/local/values.yaml -f deploy/local/notary.yaml
+#   helm upgrade --install node1 charts/corda-node -n corda \
+#     -f deploy/node1/values.yaml -f deploy/local/values.yaml -f deploy/local/node1.yaml
+#   helm upgrade --install node2 charts/corda-node -n corda \
+#     -f deploy/node2/values.yaml -f deploy/local/values.yaml -f deploy/local/node2.yaml
+
+# Use local minikube PostgreSQL instead of H2 (Corda 4.14 dropped H2)
+# DB name is overridden per-release via -f deploy/<node>/values.yaml
+db:
+  type: postgresql
+  host: corda-postgres-postgresql.corda.svc.cluster.local
+  port: 5432
+  name: cordanode1      # overridden per release; placeholder here
+  user: corda
+  schema: public
+
+# devMode = true disables PKI/TLS enforcement
+devMode: true
+
+# Run DB migrations as a pre-install Helm hook (Corda 4.14 requires this even
+# in devMode when using PostgreSQL, since it no longer auto-creates the schema).
+migrations:
+  enabled: true
+
+# Minimal resources for a laptop cluster
+resources:
+  requests:
+    cpu: "250m"
+    memory: 512Mi
+  limits:
+    memory: 1Gi
+
+# Chart-managed secret: keeps db-password (not in bootstrap secret) and uses
+# cordacadevpass for keystore/truststore to match the bootstrapper defaults.
+secrets:
+  existingSecret: ""
+  create: true
+  data:
+    rpc-password: "test"
+    db-password: "devpassword"
+    keystore-password: "cordacadevpass"
+    truststore-password: "cordacadevpass"
+
+# Use the locally built image
+image:
+  repository: corda-node
+  tag: local
+  pullPolicy: Never
+
+# Disable network policy (not enforced in standard Minikube CNI)
+networkPolicy:
+  enabled: false
+
+# Small PVC for local dev
+persistence:
+  storageClass: standard      # minikube's default storage class
+  size: 1Gi
+

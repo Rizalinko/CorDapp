@@ -34,8 +34,11 @@ jobs:
         with:
           version: v3.16.4
 
-      - name: helm lint (with prod overlay)
+      - name: helm lint corda-node (with prod overlay)
         run: helm lint charts/corda-node -f deploy/node1/values.prd.yaml
+
+      - name: helm lint corda-bootstrap
+        run: helm lint charts/corda-bootstrap -f deploy/bootstrap/values.yaml
 
       - name: Install kubeconform
         run: |
@@ -65,6 +68,6 @@ jobs:
       - name: Fail if README drifted
         run: |
           if ! git diff --exit-code charts/corda-node/README.md; then
-            echo "::error::charts/corda-node/README.md is stale — run 'make docs-helm' and commit." >&2
+            echo "::error::charts/corda-node/README.md is stale. Run make docs-helm and commit." >&2
             exit 1
           fi

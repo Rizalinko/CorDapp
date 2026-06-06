@@ -1,0 +1,16 @@
+apiVersion: v2
+name: corda-bootstrap
+description: >-
+  One shot Kubernetes Job that bootstraps a Corda OS 4.x network: runs the
+  Corda network bootstrapper to generate node certificates, network parameters
+  and peer NodeInfo files, then publishes all outputs as Kubernetes Secrets and
+  a ConfigMap so the corda-node releases can start. Deploy this chart first via
+  Helmfile (it is a needs dependency for every node release).
+type: application
+version: 0.1.0
+appVersion: "4.14"
+kubeVersion: ">=1.27.0-0"
+home: https://github.com/acmecorp/corda-platform
+sources:
+  - https://github.com/acmecorp/corda-platform
+maintainers:

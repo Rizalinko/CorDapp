@@ -11,6 +11,7 @@ CORDA_VERSION ?= 4.14
 IMAGE_TAG     ?= $(CORDA_VERSION)-dev
 JAR_IMAGE     ?= corda-jar:local
 NODE_IMAGE    ?= corda-node:local
+CORDAPP_IMAGE ?= corda-node:local-cordapp
 CHART         ?= charts/corda-node
 KUBE_VERSION  ?= 1.29.0
 
@@ -37,7 +38,7 @@ lint-shell: ## ShellCheck all shell scripts
 lint-yaml: ## Validate that all YAML parses
 	@command -v yq >/dev/null || { echo "skip: yq not installed"; exit 0; }
 	@files=$$(git ls-files --cached --others --exclude-standard '*.yml' '*.yaml' 2>/dev/null \
-	  | grep -v '/templates/' || true); \
+	  | grep -Ev '/templates/|helmfile\.yaml' || true); \
 	if [ -z "$$files" ]; then echo "lint-yaml: no plain YAML yet"; else \
 	  for f in $$files; do yq -e 'true' "$$f" >/dev/null || { echo "INVALID: $$f"; exit 1; }; done; \
 	  echo "lint-yaml: OK ($$(echo $$files | wc -w) files; helm templates checked by lint-helm)"; fi
@@ -77,7 +78,7 @@ scan-config: ## Trivy misconfiguration scan (no Docker daemon needed)
 	@command -v trivy >/dev/null || { echo "skip: trivy not installed"; exit 0; }
 	trivy config --severity HIGH,CRITICAL .
 
-##@ Container images (Part 1 — needs Docker)
+##@ Container images (Part 1, needs Docker)
 
 .PHONY: build-jar
 build-jar: ## Build the jar-image (certified JRE + Corda jars)
@@ -90,25 +91,115 @@ build-node: build-jar ## Build the node-image (FROM jar-image)
 .PHONY: images
 images: build-node ## Build all images
 
-##@ Local network (Part 1 — needs Docker + compose)
+##@ CorDapp image (Part 4, needs Docker)
 
-.PHONY: network-up
-network-up: images ## Build images, bootstrap, and start the local 3-node network
+.PHONY: build-cordapp
+build-cordapp: build-node ## Build the cordapp-image (bakes CorDapp JARs on top of the node image)
+	@if [ -z "$$(find docker/cordapp-image/cordapps -name '*.jar' 2>/dev/null)" ]; then \
+	  echo "Place CorDapp JARs in docker/cordapp-image/cordapps/ first."; exit 1; fi
+	docker build \
+	  --build-arg NODE_IMAGE=$(NODE_IMAGE) \
+	  -t $(CORDAPP_IMAGE) \
+	  docker/cordapp-image
+
+##@ Local compose network (Part 1, needs Docker)
+
+.PHONY: compose-up
+compose-up: images ## Build images, bootstrap, and start the compose network
 	NODE_IMAGE=$(NODE_IMAGE) docker compose up -d
-	@echo "Network starting. Watch readiness with: make network-status"
+	@echo "Network starting. Watch readiness with: make compose-status"
 
-.PHONY: network-status
-network-status: ## Show health/status of each service
+.PHONY: compose-status
+compose-status: ## Show health/status of each compose service
 	docker compose ps
 
-.PHONY: network-wait
-network-wait: ## Block until notary + node1 + node2 are healthy
+.PHONY: compose-wait
+compose-wait: ## Block until notary + node1 + node2 are healthy
 	TIMEOUT=$(or $(TIMEOUT),600) ./scripts/wait-healthy.sh notary node1 node2
 
-.PHONY: network-logs
-network-logs: ## Tail logs from all services
+.PHONY: compose-logs
+compose-logs: ## Tail logs from all compose services
 	docker compose logs -f
 
-.PHONY: network-down
-network-down: ## Stop the network and delete all volumes (full reset)
+.PHONY: compose-down
+compose-down: ## Stop the compose network and delete all volumes
 	docker compose down -v
+
+##@ Kubernetes network (Part 3, needs Kind and Helmfile)
+
+KIND_CLUSTER ?= corda-local
+HELMFILE     ?= helmfile
+
+.PHONY: kind-up
+kind-up: ## Create a local Kind cluster (idempotent)
+	@command -v kind >/dev/null || { echo "skip: kind not installed"; exit 0; }
+	kind create cluster --name $(KIND_CLUSTER) || true
+	kubectl config use-context kind-$(KIND_CLUSTER)
+
+.PHONY: kind-load
+kind-load: build-node kind-up ## Build corda-node:local and load it into Kind under all locally referenced tags
+	@command -v kind >/dev/null || { echo "skip: kind not installed"; exit 0; }
+	kind load docker-image $(NODE_IMAGE) --name $(KIND_CLUSTER)
+	docker tag $(NODE_IMAGE) $(REGISTRY)/corda-node:$(CORDA_VERSION)
+	kind load docker-image $(REGISTRY)/corda-node:$(CORDA_VERSION) --name $(KIND_CLUSTER)
+	docker tag $(NODE_IMAGE) $(REGISTRY)/corda-node:$(CORDA_VERSION).0
+	kind load docker-image $(REGISTRY)/corda-node:$(CORDA_VERSION).0 --name $(KIND_CLUSTER)
+
+.PHONY: network-up
+network-up: kind-load ## Bootstrap a 3-node Corda network on Kind via Helmfile
+	@command -v helmfile >/dev/null || { echo "skip: helmfile not installed"; exit 0; }
+	$(HELMFILE) -f deploy/helmfile.yaml apply
+
+.PHONY: network-down
+network-down: ## Destroy the Helmfile releases (leaves the Kind cluster)
+	@command -v helmfile >/dev/null || { echo "skip: helmfile not installed"; exit 0; }
+	$(HELMFILE) -f deploy/helmfile.yaml destroy
+
+.PHONY: network-status
+network-status: ## Show pod status in the corda namespace
+	kubectl -n corda get pods
+
+.PHONY: network-logs
+network-logs: ## Tail logs from all corda pods
+	kubectl -n corda logs -f --selector app.kubernetes.io/part-of=corda-network
+
+.PHONY: k8s-cluster-down
+k8s-cluster-down: network-down ## Destroy network and delete the Kind cluster
+	@command -v kind >/dev/null || { echo "skip: kind not installed"; exit 0; }
+	kind delete cluster --name $(KIND_CLUSTER)
+
+##@ Local Helm testing (Part 2, needs Kind and Docker)
+
+.PHONY: local-pg
+local-pg: kind-up ## Deploy a single dev PostgreSQL into the corda namespace
+	@command -v helm >/dev/null || { echo "skip: helm not installed"; exit 0; }
+	helm repo add bitnami https://charts.bitnami.com/bitnami --force-update 2>/dev/null || true
+	helm upgrade --install corda-postgres bitnami/postgresql \
+	  --namespace corda --create-namespace \
+	  -f deploy/local/postgresql-values.yaml \
+	  --wait --timeout=300s
+
+.PHONY: helm-local
+helm-local: kind-load local-pg ## Install all three corda-node releases to Kind with local overrides
+	@command -v helm >/dev/null || { echo "skip: helm not installed"; exit 0; }
+	kubectl create namespace corda --dry-run=client -o yaml | kubectl apply -f -
+	helm upgrade --install notary charts/corda-node -n corda \
+	  -f deploy/notary/values.yaml -f deploy/local/values.yaml -f deploy/local/notary.yaml
+	helm upgrade --install node1 charts/corda-node -n corda \
+	  -f deploy/node1/values.yaml -f deploy/local/values.yaml -f deploy/local/node1.yaml
+	helm upgrade --install node2 charts/corda-node -n corda \
+	  -f deploy/node2/values.yaml -f deploy/local/values.yaml -f deploy/local/node2.yaml
+
+.PHONY: helm-local-down
+helm-local-down: ## Uninstall the local corda-node releases and PostgreSQL
+	-helm uninstall notary node1 node2 -n corda 2>/dev/null
+	-helm uninstall corda-postgres -n corda 2>/dev/null
+
+##@ Terraform (Part 6, needs terraform CLI)
+
+.PHONY: tf-validate
+tf-validate: ## terraform fmt check + validate (no Azure credentials needed)
+	@command -v terraform >/dev/null || { echo "skip: terraform not installed"; exit 0; }
+	terraform -chdir=terraform fmt -check -recursive
+	terraform -chdir=terraform init -backend=false -input=false
+	terraform -chdir=terraform validate
