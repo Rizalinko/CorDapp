@@ -53,7 +53,7 @@ data:
       name: ${name}
       namespace: ${NS}
     type: Opaque
-    binaryData:
+    data:
       nodekeystore.jks: $(b64 "${dir}/certificates/nodekeystore.jks")
       sslkeystore.jks: $(b64 "${dir}/certificates/sslkeystore.jks")
       truststore.jks: $(b64 "${dir}/certificates/truststore.jks")
@@ -65,7 +65,24 @@ data:
     apply_cert_secret corda-node2-certs  "${B}/node2"
 
     log "creating network-params ConfigMap"
-    BDATA="  network-parameters: $(b64 "${B}/network-parameters")"
+    log "bootstrap directory layout:"
+    find "${B}" -maxdepth 3 -name "network-parameters" -o -name "nodeInfo-*" 2>/dev/null | sort || true
+
+    NP_FILE=""
+    for loc in "${B}/network-parameters" "${B}/notary/network-parameters" "${B}/node1/network-parameters"; do
+      if [ -f "${loc}" ]; then
+        NP_FILE="${loc}"
+        break
+      fi
+    done
+    if [ -z "${NP_FILE}" ]; then
+      log "ERROR: network-parameters not found under ${B}"
+      find "${B}" 2>/dev/null | sort || true
+      exit 1
+    fi
+    log "using network-parameters from ${NP_FILE}"
+
+    BDATA="  network-parameters: $(b64 "${NP_FILE}")"
     for f in "${B}/notary/additional-node-infos/nodeInfo-"*; do
       fname=$(basename "${f}")
       BDATA="${BDATA}

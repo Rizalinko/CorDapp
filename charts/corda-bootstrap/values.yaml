@@ -5,7 +5,7 @@ image:
   pullPolicy: IfNotPresent
 
 # -- kubectl image used by the publisher container to create K8s resources.
-kubectlImage: bitnami/kubectl:1.29
+kubectlImage: bitnami/kubectl:latest
 
 # -- Per-node settings consumed by the bootstrapper: legal name and P2P address.
 # The p2pHost must match the K8s service name that corda-node creates
