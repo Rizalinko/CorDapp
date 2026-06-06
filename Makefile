@@ -59,9 +59,9 @@ lint-actions: ## actionlint all GitHub workflow files
 .PHONY: lint-helm
 lint-helm: ## helm lint + template + kubeconform the chart with each prod overlay
 	@command -v helm >/dev/null || { echo "skip: helm not installed"; exit 0; }
-	helm lint $(CHART) -f deploy/production/node1.values.yaml
+	helm lint $(CHART) -f deploy/node1/values.prd.yaml
 	@command -v kubeconform >/dev/null || { echo "skip kubeconform: not installed"; exit 0; }
-	@for f in deploy/production/*.values.yaml; do \
+	@for f in deploy/*/values.prd.yaml; do \
 	  echo ">> template+validate $$f"; \
 	  helm template r $(CHART) -n corda -f "$$f" \
 	    | kubeconform -strict -summary -kubernetes-version $(KUBE_VERSION) -schema-location default; \

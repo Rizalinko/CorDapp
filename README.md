@@ -17,7 +17,7 @@ delivery, CI/CD, and cloud infrastructure.
 | # | Deliverable | Location | Status |
 |---|-------------|----------|--------|
 | 1 | Docker image for a Corda node (+ local `docker-compose` network) | `docker/`, `docker-compose.yml` ([docs](docs/part1-docker.md)) | ✅ done |
-| 2 | Helm chart for a Corda node | `charts/`, `deploy/production/` ([docs](docs/part2-helm.md)) | ✅ done |
+| 2 | Helm chart for a Corda node | `charts/`, `deploy/` ([docs](docs/part2-helm.md)) | ✅ done |
 | 3 | Bootstrap a 3-node network on Kubernetes | `deploy/` | _planned_ |
 | 4 | CorDapp deployment strategy | `docker/node-image/`, `docs/` | _planned_ |
 | 5 | CI/CD pipelines | `.github/workflows/` | _planned_ |
@@ -32,7 +32,7 @@ delivery, CI/CD, and cloud infrastructure.
 │   └── node-image/         #   runtime image: entrypoint, config templating, CorDapps
 ├── docker-compose.yml      # Part 1 — minimal local network (Notary + 2 nodes)
 ├── charts/                 # Part 2 — Helm chart(s)
-├── deploy/                 # Part 3 — network bootstrap (Helmfile / Argo CD / scripts)
+├── deploy/                 # Part 2 — per-instance production overlays (node1/, node2/, notary/)
 ├── terraform/              # Part 6 — cloud infrastructure (Azure)
 ├── .github/workflows/      # Part 5 — CI/CD pipelines
 ├── docs/                   # design notes, diagrams, runbooks

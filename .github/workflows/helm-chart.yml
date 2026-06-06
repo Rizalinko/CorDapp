@@ -9,12 +9,12 @@ on:
     branches: [main]
     paths:
       - charts/**
-      - deploy/production/**
+      - deploy/**
       - .github/workflows/helm-chart.yml
   pull_request:
     paths:
       - charts/**
-      - deploy/production/**
+      - deploy/**
       - .github/workflows/helm-chart.yml
   workflow_dispatch:
 
@@ -35,7 +35,7 @@ jobs:
           version: v3.16.4
 
       - name: helm lint (with prod overlay)
-        run: helm lint charts/corda-node -f deploy/production/node1.values.yaml
+        run: helm lint charts/corda-node -f deploy/node1/values.prd.yaml
 
       - name: Install kubeconform
         run: |
@@ -45,7 +45,7 @@ jobs:
 
       - name: Template + validate each production overlay
         run: |
-          for f in deploy/production/*.values.yaml; do
+          for f in deploy/*/values.prd.yaml; do
             echo "::group::$f"
             helm template r charts/corda-node -n corda -f "$f" \
               | kubeconform -strict -summary \

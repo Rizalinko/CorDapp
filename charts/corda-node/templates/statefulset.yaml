@@ -100,18 +100,18 @@ spec:
             - {name: rpc, containerPort: {{ .Values.ports.rpc }}}
             - {name: rpc-admin, containerPort: {{ .Values.ports.rpcAdmin }}}
           startupProbe:
-            exec:
-              command: ["/opt/corda/bin/healthcheck.sh"]
+            tcpSocket:
+              port: rpc
             periodSeconds: 10
             failureThreshold: {{ div .Values.probes.startupSeconds 10 }}
           readinessProbe:
-            exec:
-              command: ["/opt/corda/bin/healthcheck.sh"]
+            tcpSocket:
+              port: rpc
             periodSeconds: 15
             timeoutSeconds: 5
           livenessProbe:
-            exec:
-              command: ["/opt/corda/bin/healthcheck.sh"]
+            tcpSocket:
+              port: rpc
             periodSeconds: 30
             timeoutSeconds: 5
             failureThreshold: 4

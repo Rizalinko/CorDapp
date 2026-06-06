@@ -1,9 +1,10 @@
-# Production values — Node2 (AcmeCorp counterparty B).
-# Helm release name: node2
-role: node
+role: notary
 
-legalName: "O=AcmeCorp Node2, L=London, C=GB"
+legalName: "O=AcmeCorp Notary, L=London, C=GB"
 devMode: false
+
+notary:
+  validating: false
 
 image:
   repository: ghcr.io/acmecorp/corda-node
@@ -17,15 +18,15 @@ db:
   type: postgresql
   host: corda-prod.postgres.database.azure.com
   port: 5432
-  name: node2
-  user: node2
-  schema: node2
+  name: notary
+  user: notary
+  schema: notary
 
 secrets:
-  existingSecret: corda-node2-secrets
+  existingSecret: corda-notary-secrets
 
 certificates:
-  existingSecret: corda-node2-certs
+  existingSecret: corda-notary-certs
 
 network:
   existingNetworkParams: corda-network-params

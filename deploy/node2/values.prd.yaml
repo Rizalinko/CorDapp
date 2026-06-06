@@ -1,8 +1,6 @@
-# Production values — Node1 (AcmeCorp counterparty A).
-# Helm release name: node1
 role: node
 
-legalName: "O=AcmeCorp Node1, L=London, C=GB"
+legalName: "O=AcmeCorp Node2, L=London, C=GB"
 devMode: false
 
 image:
@@ -17,15 +15,15 @@ db:
   type: postgresql
   host: corda-prod.postgres.database.azure.com
   port: 5432
-  name: node1
-  user: node1
-  schema: node1
+  name: node2
+  user: node2
+  schema: node2
 
 secrets:
-  existingSecret: corda-node1-secrets
+  existingSecret: corda-node2-secrets
 
 certificates:
-  existingSecret: corda-node1-certs
+  existingSecret: corda-node2-certs
 
 network:
   existingNetworkParams: corda-network-params

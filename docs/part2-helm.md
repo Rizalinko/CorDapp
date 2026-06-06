@@ -14,9 +14,9 @@ Two charts would duplicate ~95% of the templates and let them drift. We keep one
 chart and select the role per release:
 
 ```bash
-helm upgrade --install notary charts/corda-node -f deploy/production/notary.values.yaml
-helm upgrade --install node1  charts/corda-node -f deploy/production/node1.values.yaml
-helm upgrade --install node2  charts/corda-node -f deploy/production/node2.values.yaml
+helm upgrade --install notary charts/corda-node -n corda -f deploy/notary/values.prd.yaml
+helm upgrade --install node1  charts/corda-node -n corda -f deploy/node1/values.prd.yaml
+helm upgrade --install node2  charts/corda-node -n corda -f deploy/node2/values.prd.yaml
 ```
 
 If AcmeCorp later adopts a notary *cluster* (HA notary with its own replication),
@@ -100,5 +100,5 @@ Nothing secret is ever committed or placed in a ConfigMap.
 ```bash
 make lint-helm     # helm lint + template + kubeconform for every prod overlay
 make docs-helm     # regenerate the chart README (helm-docs)
-helm template node1 charts/corda-node -n corda -f deploy/production/node1.values.yaml | less
+helm template node1 charts/corda-node -n corda -f deploy/node1/values.prd.yaml | less
 ```
