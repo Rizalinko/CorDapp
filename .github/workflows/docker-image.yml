@@ -1,9 +1,9 @@
 name: docker-image
 
 # Part 1 CI: lint the Dockerfiles/scripts, build both images, scan with Trivy,
-# then smoke-test the full local network with docker-compose. This is the
-# "validate in pipeline" half of every Part 1 change. Part 5 extends this into
-# the full release pipeline (semver tags, push, signing).
+# and smoke-test the full local network with docker-compose.
+# Part 5 adds the release job: push to GHCR with semver+SHA tags and sign
+# with cosign keyless signing (Sigstore OIDC, no key management required).
 
 on:
   push:
@@ -76,18 +76,19 @@ jobs:
           cache-from: type=gha,scope=node
           cache-to: type=gha,mode=max,scope=node
 
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+
       - name: Trivy scan (node-image)
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ env.NODE_IMAGE }}
-          format: sarif
-          output: trivy-node.sarif
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          trivyignores: .trivyignore
-          # Report-only for now: surface findings without blocking. Part 5
-          # flips this to exit-code 1 once a baseline is agreed with AcmeCorp.
-          exit-code: '0'
+        run: |
+          trivy image \
+            --severity CRITICAL,HIGH \
+            --format sarif \
+            --output trivy-node.sarif \
+            --ignore-unfixed \
+            --ignorefile .trivyignore \
+            --exit-code 0 \
+            "${{ env.NODE_IMAGE }}"
 
       - name: Upload Trivy SARIF
         if: always()
@@ -109,3 +110,92 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose down -v
+
+  release:
+    needs: build-scan-smoke
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      id-token: write
+    env:
+      JAR_REPO: ghcr.io/acmecorp/corda-jar
+      NODE_REPO: ghcr.io/acmecorp/corda-node
+      CORDA_VERSION: "4.14.0"
+    outputs:
+      node_tag: ${{ steps.tag.outputs.node_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Compute image tags
+        id: tag
+        run: |
+          SHA=$(echo "${{ github.sha }}" | head -c7)
+          CORDA="${{ env.CORDA_VERSION }}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            {
+              echo "jar_tags<<EOF"
+              printf '%s\n' \
+                "${{ env.JAR_REPO }}:${CORDA}" \
+                "${{ env.JAR_REPO }}:latest"
+              echo "EOF"
+              echo "node_tags<<EOF"
+              printf '%s\n' \
+                "${{ env.NODE_REPO }}:${CORDA}" \
+                "${{ env.NODE_REPO }}:latest"
+              echo "EOF"
+              echo "node_tag=${CORDA}"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "jar_tags<<EOF"
+              printf '%s\n' \
+                "${{ env.JAR_REPO }}:${CORDA}-${SHA}" \
+                "${{ env.JAR_REPO }}:dev"
+              echo "EOF"
+              echo "node_tags<<EOF"
+              printf '%s\n' \
+                "${{ env.NODE_REPO }}:${CORDA}-${SHA}" \
+                "${{ env.NODE_REPO }}:dev"
+              echo "EOF"
+              echo "node_tag=${CORDA}-${SHA}"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push jar-image
+        id: push-jar
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/jar-image
+          push: true
+          tags: ${{ steps.tag.outputs.jar_tags }}
+          cache-from: type=gha,scope=jar
+          cache-to: type=gha,mode=max,scope=jar
+
+      - name: Build and push node-image
+        id: push-node
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/node-image
+          push: true
+          tags: ${{ steps.tag.outputs.node_tags }}
+          build-args: JAR_IMAGE=${{ env.JAR_REPO }}@${{ steps.push-jar.outputs.digest }}
+          cache-from: type=gha,scope=node
+          cache-to: type=gha,mode=max,scope=node
+
+      - uses: sigstore/cosign-installer@v3
+
+      - name: Sign jar-image
+        run: cosign sign --yes "${{ env.JAR_REPO }}@${{ steps.push-jar.outputs.digest }}"
+
+      - name: Sign node-image
+        run: cosign sign --yes "${{ env.NODE_REPO }}@${{ steps.push-node.outputs.digest }}"

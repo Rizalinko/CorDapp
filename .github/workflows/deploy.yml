@@ -1,0 +1,123 @@
+name: deploy
+
+# Part 5 Pipeline C: deploy the Corda network to staging (automatic after a
+# successful docker-image build on main) or production (manual via
+# workflow_dispatch, gated by the GitHub environment protection rules).
+#
+# Secrets required:
+#   KUBECONFIG_STAGING  base64-encoded kubeconfig for the staging cluster
+#   KUBECONFIG_PROD     base64-encoded kubeconfig for the production cluster
+#
+# GitHub environments required:
+#   staging     no protection rules (auto-deploy)
+#   production  required reviewers + deployment branch rules set to main
+
+on:
+  workflow_run:
+    workflows: [docker-image]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Node image tag to deploy (e.g. 4.14.0-abc1234 or 4.14.0)"
+        required: true
+      environment:
+        description: "Target environment"
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+        default: staging
+
+permissions:
+  contents: read
+
+env:
+  CORDA_VERSION: "4.14.0"
+  HELMFILE_VERSION: "0.169.2"
+  HELM_VERSION: "v3.16.4"
+
+jobs:
+  staging:
+    name: Deploy to staging
+    if: |
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: staging
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
+            SHA=$(echo "${{ github.event.workflow_run.head_sha }}" | head -c7)
+            echo "value=${{ env.CORDA_VERSION }}-${SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${{ github.event.inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: azure/setup-kubectl@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Install helmfile
+        run: |
+          curl -fsSL \
+            "https://github.com/helmfile/helmfile/releases/download/v${{ env.HELMFILE_VERSION }}/helmfile_${{ env.HELMFILE_VERSION }}_linux_amd64.tar.gz" \
+            | tar xz helmfile
+          sudo mv helmfile /usr/local/bin/helmfile
+
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.KUBECONFIG_STAGING }}" | base64 -d > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Deploy to staging
+        run: |
+          IMAGE_TAG=${{ steps.tag.outputs.value }} \
+            helmfile -f deploy/helmfile.yaml apply
+
+      - name: Verify pods
+        run: kubectl -n corda get pods
+
+  production:
+    name: Deploy to production
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-kubectl@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: ${{ env.HELM_VERSION }}
+
+      - name: Install helmfile
+        run: |
+          curl -fsSL \
+            "https://github.com/helmfile/helmfile/releases/download/v${{ env.HELMFILE_VERSION }}/helmfile_${{ env.HELMFILE_VERSION }}_linux_amd64.tar.gz" \
+            | tar xz helmfile
+          sudo mv helmfile /usr/local/bin/helmfile
+
+      - name: Configure kubeconfig
+        run: |
+          echo "${{ secrets.KUBECONFIG_PROD }}" | base64 -d > /tmp/kubeconfig
+          echo "KUBECONFIG=/tmp/kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Deploy to production
+        run: |
+          IMAGE_TAG=${{ github.event.inputs.image_tag }} \
+            helmfile -f deploy/helmfile.yaml -e production apply
+
+      - name: Verify pods
+        run: kubectl -n corda get pods
