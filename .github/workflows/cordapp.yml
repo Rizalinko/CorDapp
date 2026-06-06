@@ -1,0 +1,111 @@
+name: cordapp-image
+
+# Part 4 CI: build the CorDapp artifact image (corda-node + CorDapp JARs),
+# scan it with Trivy, push to GHCR, then commit the updated image.tag to
+# the deploy values so the next helmfile apply picks up the new version.
+
+on:
+  workflow_dispatch:
+    inputs:
+      cordapp_version:
+        description: "CorDapp version to package (e.g. 1.0.0)"
+        required: true
+      node_tag:
+        description: "corda-node base image tag to build on (e.g. 4.14.0)"
+        required: true
+        default: "4.14.0"
+      cordapp_jar_url:
+        description: "Direct download URL for the CorDapp JAR (Nexus, Artifactory, GHCR packages, etc.)"
+        required: true
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/acmecorp/corda-node
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: hadolint (cordapp-image)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: docker/cordapp-image/Dockerfile
+
+  build-push-update:
+    needs: lint
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.node_tag }}-cordapp-${{ inputs.cordapp_version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download CorDapp JAR
+        run: |
+          mkdir -p docker/cordapp-image/cordapps
+          curl -fsSL "${{ inputs.cordapp_jar_url }}" \
+            -o "docker/cordapp-image/cordapps/acme-cordapp-${{ inputs.cordapp_version }}.jar"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push cordapp-image
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/cordapp-image
+          push: true
+          tags: ${{ env.IMAGE }}:${{ env.TAG }}
+          build-args: |
+            NODE_IMAGE=${{ env.IMAGE }}:${{ inputs.node_tag }}
+            CORDAPP_VERSION=${{ inputs.cordapp_version }}
+          cache-from: type=gha,scope=cordapp
+          cache-to: type=gha,mode=max,scope=cordapp
+
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}:${{ env.TAG }}
+          format: sarif
+          output: trivy-cordapp.sarif
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          trivyignores: .trivyignore
+          exit-code: '0'
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-cordapp.sarif
+          category: trivy-cordapp-image
+
+      - name: Install yq
+        run: |
+          curl -fsSL \
+            "https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64" \
+            -o /usr/local/bin/yq
+          chmod +x /usr/local/bin/yq
+
+      - name: Update image.tag in deploy values
+        run: |
+          for f in deploy/notary/values.yaml deploy/node1/values.yaml deploy/node2/values.yaml; do
+            yq e ".image.tag = \"${{ env.TAG }}\"" -i "$f"
+          done
+
+      - name: Commit updated image tags
+        run: |
+          git config user.email "rizalinko@gmail.com"
+          git config user.name "Rizalina Mingazheva"
+          git add deploy/notary/values.yaml deploy/node1/values.yaml deploy/node2/values.yaml
+          git diff --cached --quiet && exit 0
+          git commit -m "chore(deploy): bump cordapp image to ${{ env.TAG }}"
+          git push

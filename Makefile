@@ -11,6 +11,7 @@ CORDA_VERSION ?= 4.14
 IMAGE_TAG     ?= $(CORDA_VERSION)-dev
 JAR_IMAGE     ?= corda-jar:local
 NODE_IMAGE    ?= corda-node:local
+CORDAPP_IMAGE ?= corda-node:local-cordapp
 CHART         ?= charts/corda-node
 KUBE_VERSION  ?= 1.29.0
 
@@ -89,6 +90,17 @@ build-node: build-jar ## Build the node-image (FROM jar-image)
 
 .PHONY: images
 images: build-node ## Build all images
+
+##@ CorDapp image (Part 4, needs Docker)
+
+.PHONY: build-cordapp
+build-cordapp: build-node ## Build the cordapp-image (bakes CorDapp JARs on top of the node image)
+	@if [ -z "$$(find docker/cordapp-image/cordapps -name '*.jar' 2>/dev/null)" ]; then \
+	  echo "Place CorDapp JARs in docker/cordapp-image/cordapps/ first."; exit 1; fi
+	docker build \
+	  --build-arg NODE_IMAGE=$(NODE_IMAGE) \
+	  -t $(CORDAPP_IMAGE) \
+	  docker/cordapp-image
 
 ##@ Local compose network (Part 1 — needs Docker)
 
