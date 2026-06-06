@@ -1,5 +1,7 @@
 legalName: "O=AcmeCorp Node2, L=London, C=GB"
 devMode: true
+image:
+  tag: ""
 secrets:
   existingSecret: corda-node2-secrets
 certificates:
