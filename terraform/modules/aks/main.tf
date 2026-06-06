@@ -57,6 +57,8 @@ resource "azurerm_kubernetes_cluster" "main" {
     secret_rotation_interval = "2m"
   }
 
+  # managed = true is required in azurerm ~> 3.x even though the field is
+  # deprecated; the provider will default it in v4.0 and remove the argument.
   azure_active_directory_role_based_access_control {
     managed            = true
     azure_rbac_enabled = true

@@ -55,18 +55,18 @@ module "aks" {
 }
 
 module "postgresql" {
-  source                  = "./modules/postgresql"
-  resource_group_name     = azurerm_resource_group.main.name
-  location                = azurerm_resource_group.main.location
-  prefix                  = local.prefix
-  db_subnet_id            = module.networking.db_subnet_id
-  private_dns_zone_id     = module.networking.postgresql_dns_zone_id
-  sku_name                = var.postgresql_sku
-  storage_mb              = var.postgresql_storage_mb
-  admin_username          = var.postgresql_admin_username
-  ha_enabled              = var.postgresql_ha_enabled
-  backup_retention_days   = var.postgresql_backup_retention_days
-  geo_redundant_backup    = var.postgresql_geo_redundant_backup
-  keyvault_id             = module.keyvault.id
-  tags                    = local.common_tags
+  source                = "./modules/postgresql"
+  resource_group_name   = azurerm_resource_group.main.name
+  location              = azurerm_resource_group.main.location
+  prefix                = local.prefix
+  db_subnet_id          = module.networking.db_subnet_id
+  private_dns_zone_id   = module.networking.postgresql_dns_zone_id
+  sku_name              = var.postgresql_sku
+  storage_mb            = var.postgresql_storage_mb
+  admin_username        = var.postgresql_admin_username
+  ha_enabled            = var.postgresql_ha_enabled
+  backup_retention_days = var.postgresql_backup_retention_days
+  geo_redundant_backup  = var.postgresql_geo_redundant_backup
+  keyvault_id           = module.keyvault.id
+  tags                  = local.common_tags
 }

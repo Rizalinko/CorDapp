@@ -158,3 +158,12 @@ network-logs: ## Tail logs from all corda pods
 k8s-cluster-down: network-down ## Destroy network and delete the Kind cluster
 	@command -v kind >/dev/null || { echo "skip: kind not installed"; exit 0; }
 	kind delete cluster --name $(KIND_CLUSTER)
+
+##@ Terraform (Part 6, needs terraform CLI)
+
+.PHONY: tf-validate
+tf-validate: ## terraform fmt check + validate (no Azure credentials needed)
+	@command -v terraform >/dev/null || { echo "skip: terraform not installed"; exit 0; }
+	terraform -chdir=terraform fmt -check -recursive
+	terraform -chdir=terraform init -backend=false -input=false
+	terraform -chdir=terraform validate
