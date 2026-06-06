@@ -70,16 +70,19 @@ jobs:
           cache-from: type=gha,scope=cordapp
           cache-to: type=gha,mode=max,scope=cordapp
 
+      - name: Install Trivy
+        run: curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sudo sh -s -- -b /usr/local/bin
+
       - name: Trivy scan
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          image-ref: ${{ env.IMAGE }}:${{ env.TAG }}
-          format: sarif
-          output: trivy-cordapp.sarif
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          trivyignores: .trivyignore
-          exit-code: '0'
+        run: |
+          trivy image \
+            --severity CRITICAL,HIGH \
+            --format sarif \
+            --output trivy-cordapp.sarif \
+            --ignore-unfixed \
+            --ignorefile .trivyignore \
+            --exit-code 0 \
+            "${{ env.IMAGE }}:${{ env.TAG }}"
 
       - name: Upload Trivy SARIF
         if: always()

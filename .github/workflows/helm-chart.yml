@@ -2,7 +2,8 @@ name: helm-chart
 
 # Part 2 CI: lint the chart, render it with every production overlay, validate
 # the output against the Kubernetes schemas, and check helm-docs is up to date.
-# Part 5 extends this to package + push the chart to a registry.
+# Part 5 adds the package-push job: package both charts and push to the GHCR
+# OCI chart registry on every merge to main and on version tags.
 
 on:
   push:
@@ -71,3 +72,35 @@ jobs:
             echo "::error::charts/corda-node/README.md is stale. Run make docs-helm and commit." >&2
             exit 1
           fi
+
+  package-push:
+    needs: [lint-template-validate, helm-docs]
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    env:
+      OCI_REGISTRY: oci://ghcr.io/acmecorp/charts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.4
+
+      - name: Log in to GHCR (Helm OCI)
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | helm registry login ghcr.io \
+                --username "${{ github.actor }}" \
+                --password-stdin
+
+      - name: Package and push corda-node
+        run: |
+          helm package charts/corda-node
+          helm push corda-node-*.tgz ${{ env.OCI_REGISTRY }}
+
+      - name: Package and push corda-bootstrap
+        run: |
+          helm package charts/corda-bootstrap
+          helm push corda-bootstrap-*.tgz ${{ env.OCI_REGISTRY }}
