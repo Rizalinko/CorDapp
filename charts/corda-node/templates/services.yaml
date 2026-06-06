@@ -1,0 +1,57 @@
+{{- /* Headless service: stable DNS for the StatefulSet pod. */ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "corda-node.fullname" . }}-hl
+  labels:
+    {{- include "corda-node.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    {{- include "corda-node.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: p2p
+      port: {{ .Values.ports.p2p }}
+      targetPort: p2p
+---
+{{/* P2P service: how peer nodes reach this node. LoadBalancer to expose to
+external counterparties. This is the address advertised in node.conf. */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "corda-node.fullname" . }}-p2p
+  labels:
+    {{- include "corda-node.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.p2pType }}
+  selector:
+    {{- include "corda-node.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: p2p
+      port: {{ .Values.ports.p2p }}
+      targetPort: p2p
+---
+{{/* RPC service: cluster-internal only (operators/clients). Locked down by
+NetworkPolicy. Never expose this publicly. */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "corda-node.fullname" . }}-rpc
+  labels:
+    {{- include "corda-node.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "corda-node.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: rpc
+      port: {{ .Values.ports.rpc }}
+      targetPort: rpc
+    - name: rpc-admin
+      port: {{ .Values.ports.rpcAdmin }}
+      targetPort: rpc-admin

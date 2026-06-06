@@ -1,0 +1,67 @@
+{{- /*
+DB schema migration as a Helm hook.
+
+WHY a hook: on PostgreSQL the vault schema must exist (first install) and be
+upgraded (chart/Corda upgrades) BEFORE the node boots, otherwise the node fails
+to start. A pre-install/pre-upgrade hook guarantees that ordering. The job only
+needs the DB connection + CorDapp Liquibase scripts, so it runs with an emptyDir
+base dir (no PVC), which also sidesteps ReadWriteOnce sharing with the node pod.
+*/ -}}
+{{- if and .Values.migrations.enabled (eq .Values.db.type "postgresql") (not .Values.devMode) -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "corda-node.fullname" . }}-migrate
+  labels:
+    {{- include "corda-node.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800
+  template:
+    metadata:
+      labels:
+        {{- include "corda-node.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "corda-node.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "corda-node.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["/opt/corda/bin/entrypoint.sh", "migrate"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "corda-node.fullname" . }}-env
+          env:
+            - name: REGEN_CONFIG
+              value: "true"
+            - name: RPC_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "corda-node.secretName" . }}, key: rpc-password}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "corda-node.secretName" . }}, key: db-password}
+            - name: KEY_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "corda-node.secretName" . }}, key: keystore-password}
+            - name: TRUST_STORE_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "corda-node.secretName" . }}, key: truststore-password}
+          volumeMounts:
+            - {name: base, mountPath: /var/lib/corda}
+      volumes:
+        - name: base
+          emptyDir: {}
+{{- end }}

@@ -1,0 +1,57 @@
+role: notary
+
+legalName: "O=AcmeCorp Notary, L=London, C=GB"
+devMode: false
+
+notary:
+  validating: false
+
+image:
+  repository: ghcr.io/acmecorp/corda-node
+  tag: "4.14.0"
+  pullPolicy: IfNotPresent
+
+jvm:
+  opts: "-Xmx3g -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
+
+db:
+  type: postgresql
+  host: corda-prod.postgres.database.azure.com
+  port: 5432
+  name: notary
+  user: notary
+  schema: notary
+
+secrets:
+  existingSecret: corda-notary-secrets
+
+certificates:
+  existingSecret: corda-notary-certs
+
+network:
+  existingNetworkParams: corda-network-params
+
+config:
+  mode: generate
+
+persistence:
+  enabled: true
+  storageClass: managed-csi-premium
+  size: 50Gi
+
+resources:
+  requests:
+    cpu: "2"
+    memory: 4Gi
+  limits:
+    memory: 4Gi
+
+networkPolicy:
+  enabled: true
+  rpcAllowedFrom:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: corda-ops
+
+service:
+  p2pType: ClusterIP

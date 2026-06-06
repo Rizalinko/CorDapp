@@ -1,0 +1,26 @@
+{{- /* `helm test` smoke check: the RPC port is reachable (node has started). */ -}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "corda-node.fullname" . }}-test-rpc
+  labels:
+    {{- include "corda-node.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    {{- toYaml .Values.podSecurityContext | nindent 4 }}
+  containers:
+    - name: rpc-probe
+      image: {{ include "corda-node.image" . }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          host="{{ include "corda-node.fullname" . }}-rpc"
+          port="{{ .Values.ports.rpc }}"
+          echo "probing ${host}:${port}"
+          timeout 10 bash -c "exec 3<>/dev/tcp/${host}/${port}" && echo OK

@@ -1,0 +1,36 @@
+{{- /* Non-secret runtime configuration, consumed via envFrom. The entrypoint's
+generate-config.sh turns these into node.conf. Secrets come from the Secret. */ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "corda-node.fullname" . }}-env
+  labels:
+    {{- include "corda-node.labels" . | nindent 4 }}
+data:
+  NODE_ROLE: {{ .Values.role | quote }}
+  MY_LEGAL_NAME: {{ .Values.legalName | quote }}
+  P2P_ADDRESS: {{ printf "%s-p2p.%s.svc.cluster.local:%d" (include "corda-node.fullname" .) .Release.Namespace (int .Values.ports.p2p) | quote }}
+  P2P_PORT: {{ .Values.ports.p2p | quote }}
+  RPC_PORT: {{ .Values.ports.rpc | quote }}
+  RPC_ADMIN_PORT: {{ .Values.ports.rpcAdmin | quote }}
+  DETECT_PUBLIC_IP: "false"
+  DEV_MODE: {{ .Values.devMode | quote }}
+  RPC_USER: {{ .Values.rpc.user | quote }}
+  JAVA_OPTS: {{ .Values.jvm.opts | quote }}
+  # In generate mode the entrypoint (re)renders node.conf from this env on every
+  # start, so a config change + rollout always takes effect.
+  REGEN_CONFIG: {{ eq .Values.config.mode "generate" | quote }}
+  DB_TYPE: {{ .Values.db.type | quote }}
+  {{- if eq .Values.db.type "postgresql" }}
+  DB_HOST: {{ .Values.db.host | quote }}
+  DB_PORT: {{ .Values.db.port | quote }}
+  DB_NAME: {{ .Values.db.name | quote }}
+  DB_USER: {{ .Values.db.user | quote }}
+  DB_SCHEMA: {{ .Values.db.schema | quote }}
+  {{- end }}
+  {{- if eq .Values.role "notary" }}
+  NOTARY_VALIDATING: {{ .Values.notary.validating | quote }}
+  {{- end }}
+  {{- with .Values.network.compatibilityZoneUrl }}
+  COMPATIBILITY_ZONE_URL: {{ . | quote }}
+  {{- end }}
