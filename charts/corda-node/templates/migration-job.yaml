@@ -7,7 +7,7 @@ to start. A pre-install/pre-upgrade hook guarantees that ordering. The job only
 needs the DB connection + CorDapp Liquibase scripts, so it runs with an emptyDir
 base dir (no PVC), which also sidesteps ReadWriteOnce sharing with the node pod.
 */ -}}
-{{- if and .Values.migrations.enabled (eq .Values.db.type "postgresql") (not .Values.devMode) -}}
+{{- if and .Values.migrations.enabled (eq .Values.db.type "postgresql") -}}
 apiVersion: batch/v1
 kind: Job
 metadata:

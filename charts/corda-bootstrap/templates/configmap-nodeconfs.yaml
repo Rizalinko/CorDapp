@@ -1,0 +1,28 @@
+{{- /*
+Minimal node.conf for each node fed to the Corda network bootstrapper.
+The bootstrapper only needs myLegalName (for cert generation) and p2pAddress
+(written into the NodeInfo file so peers can reach this node).
+All other fields are handled by corda-node at runtime.
+*/ -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "corda-bootstrap.fullname" . }}-nodeconfs
+  labels:
+    {{- include "corda-bootstrap.labels" . | nindent 4 }}
+data:
+  {{- range $nodeName, $node := .Values.nodes }}
+  {{ $nodeName }}.conf: |
+    myLegalName = {{ $node.legalName | quote }}
+    p2pAddress = "{{ $node.p2pHost }}:{{ $node.p2pPort }}"
+    devMode = true
+    rpcSettings {
+      address = "0.0.0.0:10201"
+      adminAddress = "0.0.0.0:10202"
+    }
+    {{- if eq $node.role "notary" }}
+    notary {
+      validating = {{ $node.validating }}
+    }
+    {{- end }}
+  {{- end }}

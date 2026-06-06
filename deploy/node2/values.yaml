@@ -1,0 +1,8 @@
+legalName: "O=AcmeCorp Node2, L=London, C=GB"
+devMode: true
+secrets:
+  existingSecret: corda-node2-secrets
+certificates:
+  existingSecret: corda-node2-certs
+network:
+  existingNetworkParams: corda-network-params

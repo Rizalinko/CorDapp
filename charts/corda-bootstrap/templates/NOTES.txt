@@ -1,0 +1,20 @@
+Bootstrap job submitted: {{ include "corda-bootstrap.fullname" . }}-bootstrapper
+
+Wait for it to finish before the node releases are ready:
+
+  kubectl wait job/{{ include "corda-bootstrap.fullname" . }}-bootstrapper \
+    --for=condition=complete \
+    --namespace={{ .Release.Namespace }} \
+    --timeout=600s
+
+On success the following resources are created in namespace {{ .Release.Namespace }}:
+
+  Secrets : corda-notary-certs, corda-node1-certs, corda-node2-certs
+            corda-notary-secrets, corda-node1-secrets, corda-node2-secrets
+  ConfigMap: corda-network-params
+
+If you need to re-bootstrap (e.g. after network-down), delete the job first:
+
+  kubectl delete job {{ include "corda-bootstrap.fullname" . }}-bootstrapper -n {{ .Release.Namespace }}
+
+Then re-run helmfile apply.

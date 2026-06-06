@@ -1,0 +1,4 @@
+db:
+  name: cordanode2
+  schema: node2
+

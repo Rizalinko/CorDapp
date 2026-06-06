@@ -1,0 +1,26 @@
+image:
+  repository: ghcr.io/acmecorp/corda-node
+  tag: "4.14.0"
+
+nodes:
+  notary:
+    legalName: "O=AcmeCorp Notary, L=London, C=GB"
+    p2pHost: notary-corda-node-p2p.corda.svc.cluster.local
+    p2pPort: 10200
+    role: notary
+    validating: false
+  node1:
+    legalName: "O=AcmeCorp Node1, L=London, C=GB"
+    p2pHost: node1-corda-node-p2p.corda.svc.cluster.local
+    p2pPort: 10200
+    role: node
+  node2:
+    legalName: "O=AcmeCorp Node2, L=London, C=GB"
+    p2pHost: node2-corda-node-p2p.corda.svc.cluster.local
+    p2pPort: 10200
+    role: node
+
+passwords:
+  rpc: "test"
+  keystore: "cordacadevpass"
+  truststore: "cordacadevpass"
