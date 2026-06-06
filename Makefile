@@ -136,8 +136,17 @@ kind-up: ## Create a local Kind cluster (idempotent)
 	kind create cluster --name $(KIND_CLUSTER) || true
 	kubectl config use-context kind-$(KIND_CLUSTER)
 
+.PHONY: kind-load
+kind-load: build-node kind-up ## Build corda-node:local and load it into Kind under all locally referenced tags
+	@command -v kind >/dev/null || { echo "skip: kind not installed"; exit 0; }
+	kind load docker-image $(NODE_IMAGE) --name $(KIND_CLUSTER)
+	docker tag $(NODE_IMAGE) $(REGISTRY)/corda-node:$(CORDA_VERSION)
+	kind load docker-image $(REGISTRY)/corda-node:$(CORDA_VERSION) --name $(KIND_CLUSTER)
+	docker tag $(NODE_IMAGE) $(REGISTRY)/corda-node:$(CORDA_VERSION).0
+	kind load docker-image $(REGISTRY)/corda-node:$(CORDA_VERSION).0 --name $(KIND_CLUSTER)
+
 .PHONY: network-up
-network-up: kind-up ## Bootstrap a 3-node Corda network on Kind via Helmfile
+network-up: kind-load ## Bootstrap a 3-node Corda network on Kind via Helmfile
 	@command -v helmfile >/dev/null || { echo "skip: helmfile not installed"; exit 0; }
 	$(HELMFILE) -f deploy/helmfile.yaml apply
 
@@ -158,6 +167,33 @@ network-logs: ## Tail logs from all corda pods
 k8s-cluster-down: network-down ## Destroy network and delete the Kind cluster
 	@command -v kind >/dev/null || { echo "skip: kind not installed"; exit 0; }
 	kind delete cluster --name $(KIND_CLUSTER)
+
+##@ Local Helm testing (Part 2 — needs Kind and Docker)
+
+.PHONY: local-pg
+local-pg: kind-up ## Deploy a single dev PostgreSQL into the corda namespace
+	@command -v helm >/dev/null || { echo "skip: helm not installed"; exit 0; }
+	helm repo add bitnami https://charts.bitnami.com/bitnami --force-update 2>/dev/null || true
+	helm upgrade --install corda-postgres bitnami/postgresql \
+	  --namespace corda --create-namespace \
+	  -f deploy/local/postgresql-values.yaml \
+	  --wait --timeout=300s
+
+.PHONY: helm-local
+helm-local: kind-load local-pg ## Install all three corda-node releases to Kind with local overrides
+	@command -v helm >/dev/null || { echo "skip: helm not installed"; exit 0; }
+	kubectl create namespace corda --dry-run=client -o yaml | kubectl apply -f -
+	helm upgrade --install notary charts/corda-node -n corda \
+	  -f deploy/notary/values.yaml -f deploy/local/values.yaml -f deploy/local/notary.yaml
+	helm upgrade --install node1 charts/corda-node -n corda \
+	  -f deploy/node1/values.yaml -f deploy/local/values.yaml -f deploy/local/node1.yaml
+	helm upgrade --install node2 charts/corda-node -n corda \
+	  -f deploy/node2/values.yaml -f deploy/local/values.yaml -f deploy/local/node2.yaml
+
+.PHONY: helm-local-down
+helm-local-down: ## Uninstall the local corda-node releases and PostgreSQL
+	-helm uninstall notary node1 node2 -n corda 2>/dev/null
+	-helm uninstall corda-postgres -n corda 2>/dev/null
 
 ##@ Terraform (Part 6, needs terraform CLI)
 
