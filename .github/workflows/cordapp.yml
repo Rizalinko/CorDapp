@@ -71,7 +71,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=cordapp
 
       - name: Trivy scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.29.0
         with:
           image-ref: ${{ env.IMAGE }}:${{ env.TAG }}
           format: sarif
