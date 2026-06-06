@@ -35,27 +35,22 @@ resources:
   limits:
     memory: 1Gi
 
-# Let the chart create dev secrets (no external secret store in local dev)
+# Chart-managed secret: keeps db-password (not in bootstrap secret) and uses
+# cordacadevpass for keystore/truststore to match the bootstrapper defaults.
 secrets:
   existingSecret: ""
   create: true
   data:
-    rpc-password: "dev-rpc-password"
+    rpc-password: "test"
     db-password: "devpassword"
-    keystore-password: "dev-keystore-password"
-    truststore-password: "dev-truststore-password"
+    keystore-password: "cordacadevpass"
+    truststore-password: "cordacadevpass"
 
 # Use the locally built image
 image:
   repository: corda-node
   tag: local
   pullPolicy: Never
-
-certificates:
-  existingSecret: ""
-
-network:
-  existingNetworkParams: ""
 
 # Disable network policy (not enforced in standard Minikube CNI)
 networkPolicy:

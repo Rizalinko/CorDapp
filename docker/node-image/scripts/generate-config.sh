@@ -112,7 +112,6 @@ case "${DB_TYPE}" in
     emit "}"
     emit "database {"
     emit "    transactionIsolationLevel = \"READ_COMMITTED\""
-    emit "    schema = \"${DB_SCHEMA}\""
     emit "}"
     ;;
   *)
