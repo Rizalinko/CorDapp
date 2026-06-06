@@ -22,7 +22,7 @@ help: ## Show this help
 ##@ Validation (local, no daemon required)
 
 .PHONY: lint
-lint: lint-shell lint-yaml lint-docker ## Run all static checks that apply to the current tree
+lint: lint-shell lint-yaml lint-docker lint-actions ## Run all static checks that apply to the current tree
 
 .PHONY: lint-shell
 lint-shell: ## ShellCheck all shell scripts
@@ -44,6 +44,12 @@ lint-docker: ## hadolint all Dockerfiles
 	@command -v hadolint >/dev/null || { echo "skip: hadolint not installed"; exit 0; }
 	@for f in $$(git ls-files --cached --others --exclude-standard '**/Dockerfile' 'Dockerfile'); do echo "hadolint $$f"; hadolint "$$f"; done
 	@echo "lint-docker: OK"
+
+.PHONY: lint-actions
+lint-actions: ## actionlint all GitHub workflow files
+	@command -v actionlint >/dev/null || { echo "skip: actionlint not installed"; exit 0; }
+	@files=$$(git ls-files --cached --others --exclude-standard '.github/workflows/*.yml' '.github/workflows/*.yaml' 2>/dev/null); \
+	if [ -z "$$files" ]; then echo "lint-actions: no workflows yet"; else actionlint $$files && echo "lint-actions: OK"; fi
 
 ##@ Container images (Part 1 — needs Docker)
 
@@ -68,6 +74,10 @@ network-up: images ## Build images, bootstrap, and start the local 3-node networ
 .PHONY: network-status
 network-status: ## Show health/status of each service
 	docker compose ps
+
+.PHONY: network-wait
+network-wait: ## Block until notary + node1 + node2 are healthy
+	TIMEOUT=$(or $(TIMEOUT),600) ./scripts/wait-healthy.sh notary node1 node2
 
 .PHONY: network-logs
 network-logs: ## Tail logs from all services

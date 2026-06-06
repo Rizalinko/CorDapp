@@ -1,0 +1,4 @@
+# Trivy ignore file — document every suppression with a reason and a review date.
+# Format: one CVE id per line. Prefer fixing/upgrading over ignoring.
+#
+# (none yet — see docs/part1-docker.md "Image scanning" for the policy)
