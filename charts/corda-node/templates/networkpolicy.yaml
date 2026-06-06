@@ -1,0 +1,25 @@
+{{- if .Values.networkPolicy.enabled -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "corda-node.fullname" . }}
+  labels:
+    {{- include "corda-node.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "corda-node.selectorLabels" . | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    # P2P (10200) is open: any peer node must be able to reach it.
+    - ports:
+        - {port: p2p, protocol: TCP}
+    # RPC (10201/10202) is restricted to explicitly allowed sources only.
+    {{- if .Values.networkPolicy.rpcAllowedFrom }}
+    - from:
+        {{- toYaml .Values.networkPolicy.rpcAllowedFrom | nindent 8 }}
+      ports:
+        - {port: rpc, protocol: TCP}
+        - {port: rpc-admin, protocol: TCP}
+    {{- end }}
+{{- end }}

@@ -1,0 +1,28 @@
+{{ include "corda-node.fullname" . }} ({{ .Values.role }}) deployed.
+
+Legal name : {{ .Values.legalName }}
+devMode    : {{ .Values.devMode }}
+Vault      : {{ .Values.db.type }}{{ if eq .Values.db.type "postgresql" }} @ {{ .Values.db.host }}{{ end }}
+Config mode: {{ .Values.config.mode }}
+
+Endpoints (cluster-internal):
+  P2P : {{ include "corda-node.fullname" . }}-p2p.{{ .Release.Namespace }}.svc:{{ .Values.ports.p2p }}
+  RPC : {{ include "corda-node.fullname" . }}-rpc.{{ .Release.Namespace }}.svc:{{ .Values.ports.rpc }}  (restricted by NetworkPolicy)
+
+Watch start-up (first boot is slow — up to {{ .Values.probes.startupSeconds }}s):
+  kubectl -n {{ .Release.Namespace }} rollout status statefulset/{{ include "corda-node.fullname" . }}
+  kubectl -n {{ .Release.Namespace }} logs -f statefulset/{{ include "corda-node.fullname" . }}
+
+Smoke test:
+  helm test {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+{{- if .Values.devMode }}
+
+WARNING: devMode=true — dev certificates and relaxed checks. Do NOT use in production.
+{{- end }}
+{{- if and (not .Values.devMode) (not .Values.certificates.existingSecret) (not .Values.network.existingNetworkParams) }}
+
+NOTE: production node with no certificates.existingSecret / network.existingNetworkParams.
+The node expects its certificates + network-parameters on the PVC (e.g. from the
+Part 3 bootstrap job or a registration step).
+{{- end }}

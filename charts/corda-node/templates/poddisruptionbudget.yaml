@@ -1,0 +1,15 @@
+{{- if .Values.podDisruptionBudget.enabled -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "corda-node.fullname" . }}
+  labels:
+    {{- include "corda-node.labels" . | nindent 4 }}
+spec:
+  # Singleton node: keep the one replica available during voluntary disruptions
+  # (node drains/upgrades) so the node is not evicted without a replacement.
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "corda-node.selectorLabels" . | nindent 6 }}
+{{- end }}
