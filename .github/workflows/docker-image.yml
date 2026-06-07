@@ -91,7 +91,7 @@ jobs:
           output: trivy-node.sarif
           severity: CRITICAL,HIGH
           ignore-unfixed: true
-          trivyignores: .trivyignore
+          trivyignore: .trivyignore
           exit-code: 0
 
       - name: Upload Trivy SARIF
