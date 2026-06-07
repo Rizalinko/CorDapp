@@ -51,17 +51,24 @@ jobs:
   build-scan-smoke:
     needs: lint
     runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
     steps:
       - uses: actions/checkout@v4
 
       - uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: network=host
 
       - name: Build jar-image
         uses: docker/build-push-action@v6
         with:
           context: docker/jar-image
-          load: true
-          tags: ${{ env.JAR_IMAGE }}
+          push: true
+          tags: localhost:5000/corda-jar:ci
           cache-from: type=gha,scope=jar
           cache-to: type=gha,mode=max,scope=jar
 
@@ -72,7 +79,7 @@ jobs:
           load: true
           tags: ${{ env.NODE_IMAGE }}
           build-args: |
-            JAR_IMAGE=${{ env.JAR_IMAGE }}
+            JAR_IMAGE=localhost:5000/corda-jar:ci
           cache-from: type=gha,scope=node
           cache-to: type=gha,mode=max,scope=node
 
