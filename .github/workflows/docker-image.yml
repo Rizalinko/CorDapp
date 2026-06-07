@@ -84,7 +84,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=node
 
       - name: Trivy scan (node-image)
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ env.NODE_IMAGE }}
           format: sarif
