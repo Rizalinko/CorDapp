@@ -92,7 +92,7 @@ jobs:
           severity: CRITICAL,HIGH
           ignore-unfixed: true
           trivyignores: .trivyignore
-          exit-code: "0"
+          exit-code: 0
 
       - name: Upload Trivy SARIF
         if: always()
